@@ -1,0 +1,5 @@
+#!/bin/bash
+
+clang -o main src/main.c
+./main
+rm main
