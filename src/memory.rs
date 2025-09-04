@@ -13,19 +13,25 @@ pub struct Data(Box<dyn Any>);
 pub struct Memory(HashMap<Symbol, Data>);
 
 impl Memory {
-    fn new(size: usize) -> Memory {
+    // Create a new block of memory with a given capacity
+    pub fn new() -> Memory {
+        Memory(HashMap::new())
+    }
+
+    // Create a new block of memory with a given capacity
+    pub fn with_capacity(size: usize) -> Memory {
         Memory(HashMap::with_capacity(size))
     }
 
     // Write the given data to the symbol
     // If the symbol does not already exist, create it
-    fn write(&mut self, symbol: Symbol, data: Data) {
+    pub fn write(&mut self, symbol: Symbol, data: Data) {
         self.0.insert(symbol, data);
     }
 
     // Read from the given symbol
     // If the symbol does not exist, return an error
-    fn read(&self, symbol: Symbol) -> Result<&Data, &'static str> {
+    pub fn read(&self, symbol: Symbol) -> Result<&Data, &'static str> {
         let data = self.0.get(&symbol);
         match data {
             Some(good_data) => Ok(good_data),
