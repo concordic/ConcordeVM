@@ -6,24 +6,25 @@
 
 use crate::memory::*;
 
+use log::{info, warn};
 use std::any::Any;
 
 pub enum Instruction {
-    WriteConstantToSymbol(Symbol, &dyn Any),
+    WriteDataToSymbol(Symbol, Data),
     PrintSymbol(Symbol),
 }
 
-pub fn executeInstruction(instruction: Instruction, memory: Memory) {
+pub fn executeInstruction(instruction: Instruction, memory: &mut Memory) {
     match instruction {
-        Instruction::WriteConstantToSymbol(symbol, value) => writeConstantToSymbol(memory, symbol, value),
-        Instruction::PrintSymbol(symbol) => printSymbol(memory, symbol),
+        Instruction::WriteDataToSymbol(symbol, value) => writeDataToSymbol(memory, symbol, value),
+        Instruction::PrintSymbol(symbol) => printSymbol(memory as &Memory, symbol),
     }
 }
 
-fn writeConstantToSymbol(memory: Memory, symbol: Symbol, value: Data) {
+fn writeDataToSymbol(memory: &mut Memory, symbol: Symbol, value: Data) {
 
 }
 
-fn printSymbol(memory: Memory, symbol: Symbol) {
+fn printSymbol(memory: &Memory, symbol: Symbol) {
 
 }
