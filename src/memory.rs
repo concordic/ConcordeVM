@@ -2,13 +2,24 @@
 // We reference memory inside the VM not by address but by symbol.
 // Currenly all memory and variables are global, so that this is as simple as possible
 
-use std::any::Any;
+use crate::errors::log_and_return_err;
+
+use std::any::{Any, type_name};
 use std::collections::HashMap;
 
-#[derive(Hash, Eq, PartialEq, Debug)]
-pub struct Symbol(String);
+#[derive(Hash, Clone, Eq, PartialEq, Debug)]
+pub struct Symbol(pub String);
 
 pub struct Data(Box<dyn Any>);
+
+impl Data {
+    pub fn as_type<T: 'static>(&self) -> Result<&T, String> {
+        match self.0.downcast_ref::<T>() {
+            Some(result) => Ok(result),
+            None => log_and_return_err!("Could not downcast data to {}!", type_name::<T>())
+        }
+    }
+}
 
 pub struct Memory(HashMap<Symbol, Data>);
 
@@ -31,11 +42,11 @@ impl Memory {
 
     // Read from the given symbol
     // If the symbol does not exist, return an error
-    pub fn read(&self, symbol: Symbol) -> Result<&Data, &'static str> {
+    pub fn read(&self, symbol: Symbol) -> Result<&Data, String> {
         let data = self.0.get(&symbol);
         match data {
             Some(good_data) => Ok(good_data),
-            None => Err("Tried to read undefined value!"),
+            None => log_and_return_err!("Tried to read from an undefined symbol!")
         }
     }
 }
