@@ -106,7 +106,7 @@ impl CPU {
             if instruction_vec.len() <= exec_pointer.index {
                 info!("Execution pointer at symbol {} has reached the end of it's code at index {}!", exec_pointer.symbol.0, exec_pointer.index);
                 self.stack.ret();
-                if let None = self.stack.top() {
+                if self.stack.top().is_none() {
                     info!("CPU stack is empty!");
                     return Ok(false);
                 }
