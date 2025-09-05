@@ -199,7 +199,7 @@ fn ret(stack: &mut ExecutionStack) -> Result<(), String> {
 }
 
 // Print the data at the symbol to the console. Returns an error if the data is not a printable
-// type (currently either a `String` or an `i64`)
+// type (currently either a `String`, `i64`, or `bool`)
 fn print_symbol(memory: &Memory, symbol: &Symbol) -> Result<(), String> {
     let data = memory.read_untyped(symbol)?;
     if data.is::<String>() {
