@@ -8,10 +8,10 @@
 //! need to implement an instruction that adds 3 numbers together instead of 2, since you can do
 //! that with the 2 number addition just fine)
 
-use crate::memory::{self, *};
+use crate::memory::{Symbol, Data, Memory};
 use crate::cpu::ExecutionStack;
 
-use log::error;
+use log::{info, error};
 
 // The `Instruction` enum provides a set of instructions that the ConcordeVM can execute.
 //
@@ -22,7 +22,8 @@ use log::error;
 // We may move away from allowing Rust primitves, since they currently only function to load
 // literals into memory. We can, in theory, replace this with an external loader that runs when
 // code is loaded into memory.
-#[derive(Clone)]
+#[allow(dead_code)]
+#[derive(Clone,  Debug)]
 pub enum Instruction {
     // Immediate writes
     WriteStringToSymbol(Symbol, String),
@@ -39,7 +40,6 @@ pub enum Instruction {
     CompareGreater(Symbol, Symbol, Symbol), // Compare the first 2 symbols and put the result in the 3rd
     CompareLesser(Symbol, Symbol, Symbol), // Compare the first 2 symbols and put the result in the 3rd
 
-
     // I/O
     PrintSymbol(Symbol),
 
@@ -52,13 +52,15 @@ pub enum Instruction {
     NoOp(),
 }
 
-// Execute the given instruction, returning an error if something goes wrong. (eg. division by
-// zero, or accessing invalid memory)
+// Execute the given instruction and increment the execution pointer.
+// Return an error if something goes wrong. (eg. division by zero, or accessing invalid memory)
 //
 // Currently, each instruction from the enum maps to a function of the same name in a `match` statement. There
-// may be a better way to do this that's more extensible.
+// may be a better way to do this that's more extensible. We also handle incrementing the stack
+// only when we need to in the same way, so there's room for improvement.
 pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory, stack: &mut ExecutionStack) -> Result<(), String> {
-    match instruction {
+    info!("Executing instruction {:?}", instruction);
+    let result = match instruction {
         // Immediate writes
         Instruction::WriteStringToSymbol(symbol, value) => write_string_to_symbol(memory, symbol, value),
         Instruction::WriteIntToSymbol(symbol, value) => write_int_to_symbol(memory, symbol, value),
@@ -84,8 +86,19 @@ pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory, stack
         
         // Misc.
         Instruction::NoOp() => Ok(()),
+
+        #[allow(unreachable_patterns)]
         _ => Err("Unimplemented operation!".to_string()),
-    }
+    };
+
+    // We don't want to increment the stack after jumping, since it'll start execution from the
+    // second instruction as a result.
+    match instruction {
+        Instruction::Jump(_) | Instruction::JumpIfTrue(_, _) => {}
+        _ => stack.increment(),
+    };
+
+    result
 }
 
 // Write a `String` literal to a symbol.
@@ -173,6 +186,8 @@ fn jump_if_true(memory: &mut Memory, stack: &mut ExecutionStack, target: &Symbol
     let c = memory.read_typed::<bool>(condition)?;
     if *c {
         stack.jump(target);
+    } else {
+        stack.increment();
     }
     Ok(())
 }

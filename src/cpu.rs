@@ -15,7 +15,7 @@ use std::vec::Vec;
 //
 // Contains the symbol under which the instructions are stored, as well as the index of the
 // instruction currently being executed.
-struct ExecutionPointer {
+pub struct ExecutionPointer {
     symbol: Symbol,
     index: usize,
 }
@@ -25,6 +25,11 @@ struct ExecutionPointer {
 pub struct ExecutionStack(Vec<ExecutionPointer>);
 
 impl ExecutionStack {
+    // Delete everything in the stack.
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
     // Get the top pointer on the stack. Returns None if the stack is empty.
     pub fn top(&self) -> Option<&ExecutionPointer>{
         self.0.last()
@@ -37,11 +42,13 @@ impl ExecutionStack {
 
     // Jump execution to a given symbol. Will not error, even if the symbol is undefined.
     pub fn jump(&mut self, target: &Symbol) {
+        info!("Jumped to {}!", target.0);
         self.0.push(ExecutionPointer { symbol: target.clone(), index: 0 });
     }
 
     // Return execution to the previous location. Will not error.
     pub fn ret(&mut self) {
+        info!("Returned!");
         self.0.pop();
     }
 }
@@ -64,6 +71,18 @@ impl CPU {
             stack: ExecutionStack(Vec::new()),
         }
     }
+    
+    // Load instructions into memory at a given symbol.
+    pub fn load_instructions(&mut self, instructions: &Vec<Instruction>, symbol: &Symbol) {
+        self.memory.write(symbol, Data::new(instructions));
+        info!("Loaded {} instructions into symbol {}", instructions.len(), symbol.0);
+    }
+
+    // Get the CPU ready to start executing code. Clears the stack and jumps to the entrypoint.
+    pub fn init_execution(&mut self, entrypoint: &Symbol) {
+        self.stack.clear();
+        self.stack.jump(entrypoint);
+    }
 
     // Complete one CPU cycle. Returns false iff the stack is empty. Returns an error if something
     // goes wrong during execution. Returns true otherwise.
@@ -71,7 +90,7 @@ impl CPU {
     // Each CPU cycle does the following:
     //   - Checks if the stack is empty. If it is, return false. If not, continue.
     //   - Reads the instructions that the `ExecutionPointer` at the top of the stack points to.
-    //   - If we're done execution there, pop the pointer off the stack and return true
+    //   - If we're done execution there, return from that block, and return true. 
     //   - Otherwise, read the instruction at the given index and execute it.
     //   - If the instruction errors, return the error. Otherwise, return true.
     //
@@ -87,11 +106,15 @@ impl CPU {
             if instruction_vec.len() <= exec_pointer.index {
                 info!("Execution pointer at symbol {} has reached the end of it's code at index {}!", exec_pointer.symbol.0, exec_pointer.index);
                 self.stack.ret();
-                return Ok(true);
+                if let None = self.stack.top() {
+                    info!("CPU stack is empty!");
+                    return Ok(false);
+                }
+                self.stack.increment();
+            } else {
+                let instruction = &instruction_vec[exec_pointer.index].clone();
+                execute_instruction(instruction, &mut self.memory, &mut self.stack)?;
             }
-            let instruction = &instruction_vec[exec_pointer.index].clone();
-            execute_instruction(instruction, &mut self.memory, &mut self.stack)?;
-            self.stack.increment();
             Ok(true)
         }
         else {
@@ -99,12 +122,4 @@ impl CPU {
             Ok(false)
         }
     }
-
-    // Load instructions into memory and jump to them. 
-    pub fn load_instructions(&mut self, instructions: &Vec<Instruction>, symbol: &Symbol) {
-        self.memory.write(symbol, Data::new(instructions));
-        self.stack.jump(symbol);
-        info!("Loaded {} instructions into symbol {}", instructions.len(), symbol.0);
-    }
-
 }
