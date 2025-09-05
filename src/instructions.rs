@@ -7,22 +7,34 @@
 use crate::memory::*;
 
 use log::{info, warn};
+use core::sync;
 use std::any::Any;
 
 #[derive(Clone)]
 pub enum Instruction {
+    // Immediate writes
     WriteStringToSymbol(Symbol, String),
-    WriteUSizeToSymbol(Symbol, usize),
-    CopySymbol(Symbol, Symbol),
+    WriteIntToSymbol(Symbol, i64),
+
+    // Memory management
+    // CopySymbol(Symbol, Symbol),
+    
+    // Arithmetic
+    AddSymbols(Symbol, Symbol, Symbol),
+
+    // I/O
     PrintSymbol(Symbol),
+
+    // Misc.
     NoOp(),
 }
 
 pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory) {
     match instruction {
         Instruction::WriteStringToSymbol(symbol, value) => write_string_to_symbol(memory, symbol, value),
-        Instruction::WriteUSizeToSymbol(symbol, value) => write_usize_to_symbol(memory, symbol, value),
-        Instruction::CopySymbol(symbol_source, symbol_dest) => copy_symbol(memory, symbol_source, symbol_dest),
+        Instruction::WriteIntToSymbol(symbol, value) => write_usize_to_symbol(memory, symbol, value),
+        // Instruction::CopySymbol(source, dest) => copy_symbol(memory, symbol_source, symbol_dest),
+        Instruction::AddSymbols(a, b, dest) => add_symbols(memory, a, b, dest),
         Instruction::PrintSymbol(symbol) => print_symbol(memory, symbol),
         Instruction::NoOp() => {},
     }
@@ -33,18 +45,24 @@ fn write_string_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &String) 
     memory.write(symbol.clone(), data);
 }
 
-fn write_usize_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &usize) {
+fn write_usize_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &i64) {
     let data = Data(Box::new(value.clone()));
     memory.write(symbol.clone(), data);
 }
 
-fn copy_symbol(memory: &mut Memory, symbol_source: &Symbol, symbol_dest: &Symbol) {
-    match memory.read(symbol_source) {
-        Ok(val) => memory.write(symbol_dest.clone(), val.clone()),
-        Err(e) => panic!("{}", e)
-    }
+// fn copy_symbol(memory: &mut Memory, source: &Symbol, dest: &Symbol) {
+//     match memory.read(source) {
+//         Ok(val) => memory.write(dest.clone(), val.clone()),
+//         Err(e) => panic!("{}", e)
+//     }
+// }
+
+fn add_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) {
+    let a_data = memory.read::<i64>(a);
+    let b_data = memory.read::<i64>(b);
+    
 }
 
 fn print_symbol(memory: &Memory, symbol: &Symbol) {
-    
+
 }

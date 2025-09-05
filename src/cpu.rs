@@ -29,7 +29,7 @@ impl CPU {
     // empty and there is nothing more to execute
     pub fn cycle(&mut self) -> Result<bool, String> {
         if let Some(exec_pointer) = self.stack.last() {
-            match Self::get_instruction_data(&self.memory, exec_pointer) {
+            match self.memory.read::<Vec<Instruction>>(&exec_pointer.symbol) {
                 Ok(instruction_vec) => {
                     // This exec pointer has reached the end of it's code, so we can pop it off
                     if instruction_vec.len() >= exec_pointer.index {
@@ -47,25 +47,6 @@ impl CPU {
         else {
             println!("CPU Stack is empty!");
             Ok(false)
-        }
-    }
-
-    // Get all instructions under a given symbol. Fails if the symbol does not contain an vec of
-    // instructions
-    fn get_instruction_data<'a>(
-        memory: &'a Memory,
-        exec_pointer: &ExecutionPointer
-    ) -> Result<&'a Vec<Instruction>, String> {
-        match memory.read(&exec_pointer.symbol) {
-            Ok(instruction_data) => {
-                if let Ok(instruction_vec) = instruction_data.as_type::<Vec<Instruction>>() {
-                    Ok(instruction_vec)
-                }
-                else {
-                    log_and_return_err!("Attempted to get instructions from a symbol that did not contain any!")
-                }
-            }
-            Err(e) => log_and_return_err!("Couldn't get instruction data due to previous error:\n\t => {}", e)
         }
     }
 }
