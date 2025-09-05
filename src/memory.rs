@@ -49,6 +49,7 @@ impl Memory {
     }
 
     // Create a new block of memory with a given capacity
+    #[allow(dead_code)]
     pub fn with_capacity(size: usize) -> Memory {
         Memory(HashMap::with_capacity(size))
     }

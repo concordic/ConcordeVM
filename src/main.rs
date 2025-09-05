@@ -9,6 +9,7 @@ fn main() {
 
     let mut cpu = cpu::CPU::new();
     let inst = vec![
+        instructions::Instruction::NoOp(),
         instructions::Instruction::WriteIntToSymbol(memory::Symbol("int_test_a".to_string()), 69),
         instructions::Instruction::WriteIntToSymbol(memory::Symbol("int_test_b".to_string()), 420),
         instructions::Instruction::WriteStringToSymbol(memory::Symbol("string_test_a".to_string()), "Hello World!".to_string()),

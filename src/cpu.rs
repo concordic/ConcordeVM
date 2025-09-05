@@ -1,10 +1,9 @@
 // This is where code gets read and executed
 
-use crate::{instructions, log_and_return_err};
 use crate::instructions::{Instruction, execute_instruction};
 use crate::memory::*;
 
-use log::{info, warn, error};
+use log::info;
 use std::vec::Vec;
 
 struct ExecutionPointer {
@@ -12,6 +11,7 @@ struct ExecutionPointer {
     index: usize,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 pub struct CPU {
     memory: Memory,
     stack: Vec<ExecutionPointer>,
