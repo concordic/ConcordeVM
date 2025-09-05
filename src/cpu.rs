@@ -45,6 +45,13 @@ impl CPU {
     // Complete one CPU cycle. Returns false iff the stack is empty. Returns an error if something
     // goes wrong during execution. Returns true otherwise.
     //
+    // Each CPU cycle does the following:
+    //   - Checks if the stack is empty. If it is, return false. If not, continue.
+    //   - Reads the instructions that the `ExecutionPointer` at the top of the stack points to.
+    //   - If we're done execution there, pop the pointer off the stack and return true
+    //   - Otherwise, read the instruction at the given index and execute it.
+    //   - If the instruction errors, return the error. Otherwise, return true.
+    //
     // One CPU cycle does not necessarily map to one instruction, as a CPU cycle is used every time
     // we pop an `ExecutionPointer` off of the stack when we are done executing those
     // instructions. However, excluding that, each cycle executes one instruction.
