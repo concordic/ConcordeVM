@@ -37,17 +37,16 @@ pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory) -> Re
 }
 
 fn write_string_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &String) -> Result<(), String> {
-    let data = Data(Box::new(value.clone()));
-    memory.write(symbol, data);
+    memory.write(symbol, Data::new(value));
     Ok(())
 }
 
 fn write_usize_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &i64) -> Result<(), String> {
-    let data = Data(Box::new(value.clone()));
-    memory.write(symbol, data);
+    memory.write(symbol, Data::new(value));
     Ok(())
 }
 
+// Currently does nothing because copying arbitrary data is currently impossible
 fn copy_symbol(memory: &mut Memory, source: &Symbol, dest: &Symbol) -> Result<(), String> {
     memory.copy(source, dest)?;
     Ok(())
@@ -57,8 +56,8 @@ fn copy_symbol(memory: &mut Memory, source: &Symbol, dest: &Symbol) -> Result<()
 fn add_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
     let a_data = memory.read::<i64>(a)?;
     let b_data = memory.read::<i64>(b)?;
-    let result = Data(Box::new(a_data + b_data));
-    memory.write(dest, result);
+    let result = a_data + b_data;
+    memory.write(dest, Data::new(&result));
     Ok(())
 }
 

@@ -14,6 +14,10 @@ pub struct Symbol(pub String);
 pub struct Data(pub Box<dyn Any>);
 
 impl Data {
+    pub fn new<T: Clone + 'static>(value: &T) -> Data {
+        Data(Box::new(value.clone()))
+    }
+
     pub fn as_type<T: 'static>(&self) -> Result<&T, String> {
         match self.0.downcast_ref::<T>() {
             Some(result) => Ok(result),
@@ -68,7 +72,7 @@ impl Memory {
         match self.0.get(source) {
             Some(data) => {
                 // TODO: Somehow clone the data so we can own the copy
-                self.0.insert(dest.clone(), data);
+                // self.0.insert(dest.clone(), data);
                 Ok(())
             }
             None => log_and_return_err!("Couldn't copy undefined symbol {} to {}!", source.0, dest.0)
