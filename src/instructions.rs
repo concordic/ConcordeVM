@@ -8,7 +8,8 @@
 //! need to implement an instruction that adds 3 numbers together instead of 2, since you can do
 //! that with the 2 number addition just fine)
 
-use crate::memory::*;
+use crate::memory::{self, *};
+use crate::cpu::ExecutionStack;
 
 use log::error;
 
@@ -26,15 +27,26 @@ pub enum Instruction {
     // Immediate writes
     WriteStringToSymbol(Symbol, String),
     WriteIntToSymbol(Symbol, i64),
+    WriteBoolToSymbol(Symbol, bool),
 
     // Memory management
     CopySymbol(Symbol, Symbol),
     
-    // Arithmetic
-    AddSymbols(Symbol, Symbol, Symbol),
+    // Logic & arithmetic
+    AddSymbols(Symbol, Symbol, Symbol), // Add the first 2 symbols and put the result in the 3rd
+    SubtractSymbols(Symbol, Symbol, Symbol), // Subtract the 2nd symbol from the 1st and put the result in the 3rd
+    CompareEqual(Symbol, Symbol, Symbol), // Compare the first 2 symbols and put the result in the 3rd
+    CompareGreater(Symbol, Symbol, Symbol), // Compare the first 2 symbols and put the result in the 3rd
+    CompareLesser(Symbol, Symbol, Symbol), // Compare the first 2 symbols and put the result in the 3rd
+
 
     // I/O
     PrintSymbol(Symbol),
+
+    // Flow control
+    Jump(Symbol), // Jump to this symbol
+    JumpIfTrue(Symbol, Symbol), // if the first symbol is zero, jump to the second symbol
+    Return(), // Return to the previous symbol
 
     // Misc.
     NoOp(),
@@ -45,29 +57,51 @@ pub enum Instruction {
 //
 // Currently, each instruction from the enum maps to a function of the same name in a `match` statement. There
 // may be a better way to do this that's more extensible.
-pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory) -> Result<(), String> {
+pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory, stack: &mut ExecutionStack) -> Result<(), String> {
     match instruction {
+        // Immediate writes
         Instruction::WriteStringToSymbol(symbol, value) => write_string_to_symbol(memory, symbol, value),
         Instruction::WriteIntToSymbol(symbol, value) => write_int_to_symbol(memory, symbol, value),
+        Instruction::WriteBoolToSymbol(symbol, value) => write_bool_to_symbol(memory, symbol, value),
+        
+        // Memory management
         Instruction::CopySymbol(source, dest) => copy_symbol(memory, source, dest),
+        
+        // Arithmetic
         Instruction::AddSymbols(a, b, dest) => add_symbols(memory, a, b, dest),
+        Instruction::SubtractSymbols(a, b, dest) => subtract_symbols(memory, a, b, dest),
+        Instruction::CompareEqual(a, b, dest) => compare_equal(memory, a, b, dest),
+        Instruction::CompareGreater(a, b, dest) => compare_greater(memory, a, b, dest),
+        Instruction::CompareLesser(a, b, dest) => compare_lesser(memory, a, b, dest),
+        
+        // I/O
         Instruction::PrintSymbol(symbol) => print_symbol(memory, symbol),
+        
+        // Flow control
+        Instruction::Jump(target) => jump(stack, target),
+        Instruction::JumpIfTrue(target, condition) => jump_if_true(memory, stack, target, condition),
+        Instruction::Return() => ret(stack),
+        
+        // Misc.
         Instruction::NoOp() => Ok(()),
+        _ => Err("Unimplemented operation!".to_string()),
     }
 }
 
 // Write a `String` literal to a symbol.
-//
-// Can never error, since writing will always succeed.
 fn write_string_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &String) -> Result<(), String> {
     memory.write(symbol, Data::new(value));
     Ok(())
 }
 
 // Write an `i64` literal to a symbol.
-//
-// Can never error, since writing will always succeed.
 fn write_int_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &i64) -> Result<(), String> {
+    memory.write(symbol, Data::new(value));
+    Ok(())
+}
+
+// Write a `bool` literal to a symbol.
+fn write_bool_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &bool) -> Result<(), String> {
     memory.write(symbol, Data::new(value));
     Ok(())
 }
@@ -78,13 +112,74 @@ fn copy_symbol(memory: &mut Memory, source: &Symbol, dest: &Symbol) -> Result<()
     Ok(())
 }
 
-// Add the integers in `a` and `b` together. Returns an error if either `a` or `b` is undefined, or
-// does not contain an integer.
+// Add the integers in `a` and `b` together, and put the result in `dest`.
+// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
 fn add_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
     let a_data = memory.read_typed::<i64>(a)?;
     let b_data = memory.read_typed::<i64>(b)?;
     let result = a_data + b_data;
     memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+// Subtract the integer in `b` from `a`, and put the result in `dest`.
+// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
+fn subtract_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<i64>(a)?;
+    let b_data = memory.read_typed::<i64>(b)?;
+    let result = a_data - b_data;
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+// Check if the integers in `a` and `b` are equal, and put the result in `dest` 
+// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
+fn compare_equal(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<i64>(a)?;
+    let b_data = memory.read_typed::<i64>(b)?;
+    let result = a_data == b_data;
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+// Check if the integer in `a` is greater than in `b`, and put the result in `dest` 
+// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
+fn compare_greater(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<i64>(a)?;
+    let b_data = memory.read_typed::<i64>(b)?;
+    let result = a_data > b_data;
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+// Check if the integer in `a` is lesser than in `b`, and put the result in `dest` 
+// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
+fn compare_lesser(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<i64>(a)?;
+    let b_data = memory.read_typed::<i64>(b)?;
+    let result = a_data < b_data;
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+// Jump execution to the target symbol. Will not error.
+fn jump(stack: &mut ExecutionStack, target: &Symbol) -> Result<(), String> {
+    stack.jump(target);
+    Ok(())
+}
+
+// Jump execution to the target if the condition is true. Will not error.
+fn jump_if_true(memory: &mut Memory, stack: &mut ExecutionStack, target: &Symbol, condition: &Symbol) -> Result<(), String> {
+    let c = memory.read_typed::<bool>(condition)?;
+    if *c {
+        stack.jump(target);
+    }
+    Ok(())
+}
+
+// Return execution to the last symbol. Will not error.
+fn ret(stack: &mut ExecutionStack) -> Result<(), String> {
+    stack.ret();
     Ok(())
 }
 

@@ -11,7 +11,7 @@ use crate::memory::*;
 use log::info;
 use std::vec::Vec;
 
-// `ExecutionPointer`s represent a location in memoty where code is being executed.
+// `ExecutionPointer`s represent a location in memory where code is being executed.
 //
 // Contains the symbol under which the instructions are stored, as well as the index of the
 // instruction currently being executed.
@@ -20,17 +20,40 @@ struct ExecutionPointer {
     index: usize,
 }
 
+// The `ExecutionStack` is the stack of the CPU. It stores `ExecutionPointer`s to every block of
+// code being executed at any moment. 
+pub struct ExecutionStack(Vec<ExecutionPointer>);
+
+impl ExecutionStack {
+    // Get the top pointer on the stack. Returns None if the stack is empty.
+    pub fn top(&self) -> Option<&ExecutionPointer>{
+        self.0.last()
+    }
+
+    // Increment the index of the top pointer on the stack.
+    pub fn increment(&mut self) {
+        self.0.last_mut().unwrap().index += 1;
+    }
+
+    // Jump execution to a given symbol. Will not error, even if the symbol is undefined.
+    pub fn jump(&mut self, target: &Symbol) {
+        self.0.push(ExecutionPointer { symbol: target.clone(), index: 0 });
+    }
+
+    // Return execution to the previous location. Will not error.
+    pub fn ret(&mut self) {
+        self.0.pop();
+    }
+}
+
 // The `CPU` is where instruction reading and execution is handled.
 //
-// Contains `Memory`, as well as a stack of `ExecutionPointer`s.
-//
-// Currently, the stack does nothing of value, since we do not support branching or functions.
-// However, once those are implemented, the stack will be used to keep track of the return location
-// for every layer of function calls or branches.
+// Contains `Memory`, as well as an `ExecutionStack`. These are used to read and execute
+// instructions. 
 #[allow(clippy::upper_case_acronyms)]
 pub struct CPU {
     memory: Memory,
-    stack: Vec<ExecutionPointer>,
+    stack: ExecutionStack,
 }
 
 impl CPU {
@@ -38,7 +61,7 @@ impl CPU {
     pub fn new() -> CPU {
         CPU {
             memory: Memory::new(),
-            stack: Vec::new(),
+            stack: ExecutionStack(Vec::new()),
         }
     }
 
@@ -53,21 +76,22 @@ impl CPU {
     //   - If the instruction errors, return the error. Otherwise, return true.
     //
     // One CPU cycle does not necessarily map to one instruction, as a CPU cycle is used every time
-    // we pop an `ExecutionPointer` off of the stack when we are done executing those
-    // instructions. However, excluding that, each cycle executes one instruction.
+    // we pop an execution pointer off of the stack when we are done executing those instructions. This is
+    // technically equivalent to every instruction vector having a return instruction tacked on at
+    // the end, but isn't handled the same way.
     pub fn cycle(&mut self) -> Result<bool, String> {
-        if let Some(exec_pointer) = self.stack.last_mut() {
+        if let Some(exec_pointer) = self.stack.top() {
             info!("Currently executing code at symbol [{}], index {}", exec_pointer.symbol.0, exec_pointer.index);
             let instruction_vec = self.memory.read_typed::<Vec<Instruction>>(&exec_pointer.symbol)?;
-            // This exec pointer has reached the end of it's code, so we can pop it off
+            // This execution pointer has reached the end of it's code, so we can return
             if instruction_vec.len() <= exec_pointer.index {
-                info!("Exec pointer at symbol {} has reached the end of it's code at index {}!", exec_pointer.symbol.0, exec_pointer.index);
-                self.stack.pop();
+                info!("Execution pointer at symbol {} has reached the end of it's code at index {}!", exec_pointer.symbol.0, exec_pointer.index);
+                self.stack.ret();
                 return Ok(true);
             }
             let instruction = &instruction_vec[exec_pointer.index].clone();
-            execute_instruction(instruction, &mut self.memory)?;
-            exec_pointer.index += 1;
+            execute_instruction(instruction, &mut self.memory, &mut self.stack)?;
+            self.stack.increment();
             Ok(true)
         }
         else {
@@ -76,10 +100,11 @@ impl CPU {
         }
     }
 
-    // Load instructions into memory and add an `ExecutionPointer` for them to the stack.
+    // Load instructions into memory and jump to them. 
     pub fn load_instructions(&mut self, instructions: &Vec<Instruction>, symbol: &Symbol) {
         self.memory.write(symbol, Data::new(instructions));
-        self.stack.push(ExecutionPointer { symbol: symbol.clone(), index: 0 });
+        self.stack.jump(symbol);
         info!("Loaded {} instructions into symbol {}", instructions.len(), symbol.0);
     }
+
 }
