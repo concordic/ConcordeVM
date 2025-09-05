@@ -206,6 +206,8 @@ fn print_symbol(memory: &Memory, symbol: &Symbol) -> Result<(), String> {
         println!("{}", data.downcast_ref::<String>().unwrap()); 
     } else if data.is::<i64>() {
         println!("{}", data.downcast_ref::<i64>().unwrap()); 
+    } else if data.is::<bool>() {
+        println!("{}", data.downcast_ref::<bool>().unwrap()); 
     } else {
         log_and_return_err!("Cannot print whatever type is in {}!", symbol.0)
     }
