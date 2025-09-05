@@ -13,7 +13,7 @@ pub enum Instruction {
     WriteIntToSymbol(Symbol, i64),
 
     // Memory management
-    // CopySymbol(Symbol, Symbol),
+    CopySymbol(Symbol, Symbol),
     
     // Arithmetic
     AddSymbols(Symbol, Symbol, Symbol),
@@ -29,7 +29,7 @@ pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory) -> Re
     match instruction {
         Instruction::WriteStringToSymbol(symbol, value) => write_string_to_symbol(memory, symbol, value),
         Instruction::WriteIntToSymbol(symbol, value) => write_usize_to_symbol(memory, symbol, value),
-        // Instruction::CopySymbol(source, dest) => copy_symbol(memory, symbol_source, symbol_dest),
+        Instruction::CopySymbol(source, dest) => copy_symbol(memory, source, dest),
         Instruction::AddSymbols(a, b, dest) => add_symbols(memory, a, b, dest),
         Instruction::PrintSymbol(symbol) => print_symbol(memory, symbol),
         Instruction::NoOp() => Ok(()),
@@ -46,7 +46,6 @@ fn write_usize_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &i64) -> R
     Ok(())
 }
 
-// Currently does nothing because copying arbitrary data is currently impossible
 fn copy_symbol(memory: &mut Memory, source: &Symbol, dest: &Symbol) -> Result<(), String> {
     memory.copy(source, dest)?;
     Ok(())
@@ -54,13 +53,20 @@ fn copy_symbol(memory: &mut Memory, source: &Symbol, dest: &Symbol) -> Result<()
 
 // Errors if either a or b are not integers
 fn add_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
-    let a_data = memory.read::<i64>(a)?;
-    let b_data = memory.read::<i64>(b)?;
+    let a_data = memory.read_typed::<i64>(a)?;
+    let b_data = memory.read_typed::<i64>(b)?;
     let result = a_data + b_data;
     memory.write(dest, Data::new(&result));
     Ok(())
 }
 
 fn print_symbol(memory: &Memory, symbol: &Symbol) -> Result<(), String> {
+    let data = memory.read_untyped(symbol)?;
+    if data.is::<String>() {
+       println!("{}", data.downcast_ref::<String>().unwrap()); 
+    }
+    if data.is::<i64>() {
+       println!("{}", data.downcast_ref::<i64>().unwrap()); 
+    }
     Ok(())
 }

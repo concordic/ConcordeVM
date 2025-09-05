@@ -62,6 +62,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cloneable-any"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d0ed4f814366162d6f9cd034b29fb859ed99543575708218075f553f94311bc"
+dependencies = [
+ "downcast-rs",
+ "dyn-clone",
+]
+
+[[package]]
 name = "colog"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -92,9 +102,23 @@ dependencies = [
 name = "concordevm"
 version = "0.1.0"
 dependencies = [
+ "cloneable-any",
  "colog",
+ "dyn-clone",
  "log",
 ]
+
+[[package]]
+name = "downcast-rs"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
+
+[[package]]
+name = "dyn-clone"
+version = "1.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "env_filter"

@@ -4,33 +4,40 @@
 
 use crate::log_and_return_err;
 
-use std::any::{Any, type_name};
+use std::any::type_name;
 use std::collections::HashMap;
 use log::error;
+use cloneable_any::CloneableAny;
+use dyn_clone::clone_box;
 
+// Symbols (at least right now) are just String wrappers, so cloning and such is relatively cheap
+// for them
 #[derive(Hash, Clone, Eq, PartialEq, Debug)]
 pub struct Symbol(pub String);
 
-pub struct Data(pub Box<dyn Any>);
+pub struct Data(Box<dyn CloneableAny>);
 
 impl Data {
+    // Creating new Data structs should always clone the inner value, since we don't want weird
+    // borrows happening. Everything should be owned by the Memory.
     pub fn new<T: Clone + 'static>(value: &T) -> Data {
         Data(Box::new(value.clone()))
     }
 
-    pub fn as_type<T: 'static>(&self) -> Result<&T, String> {
+    pub fn as_type<T: CloneableAny + 'static>(&self) -> Result<&T, String> {
         match self.0.downcast_ref::<T>() {
             Some(result) => Ok(result),
             None => log_and_return_err!("Could not downcast data to {}!", type_name::<T>())
         }
     }
 
-    // pub fn copy_into(&self, dest: &Data) {
-    //     let ptr = Box::into_raw(&self.0);
-    //     unsafe {
-    //         self.0 = Box::from_raw(ptr);
-    //     };
-    // }
+    pub fn as_ref(&self) -> &dyn CloneableAny {
+        self.0.as_ref()
+    }
+
+    pub fn clone(&self) -> Data {
+        Data(clone_box(self.0.as_ref()))
+    }
 }
 
 pub struct Memory(HashMap<Symbol, Data>);
@@ -52,9 +59,18 @@ impl Memory {
         self.0.insert(symbol.clone(), data);
     }
 
+    // Read from the given symbol, returning an untyped CloneableAny 
+    // If the symbol does not exist, return an error
+    pub fn read_untyped(&self, symbol: &Symbol) -> Result<&dyn CloneableAny, String> {
+        match self.0.get(symbol) {
+            Some(data) => Ok(data.as_ref()), 
+            None => log_and_return_err!("Tried to read from undefined symbol: {}", symbol.0)
+        }
+    }
+
     // Read from the given symbol, attempting to get a specific type
     // If the symbol does not exist, return an error
-    pub fn read<T: 'static>(&self, symbol: &Symbol) -> Result<&T, String> {
+    pub fn read_typed<T: CloneableAny + 'static>(&self, symbol: &Symbol) -> Result<&T, String> {
         match self.0.get(symbol) {
             Some(data) => {
                 let typed_data = data.as_type::<T>()?;
@@ -71,8 +87,7 @@ impl Memory {
     pub fn copy(&mut self, source: &Symbol, dest: &Symbol) -> Result<(), String> {
         match self.0.get(source) {
             Some(data) => {
-                // TODO: Somehow clone the data so we can own the copy
-                // self.0.insert(dest.clone(), data);
+                self.0.insert(dest.clone(), data.clone());
                 Ok(())
             }
             None => log_and_return_err!("Couldn't copy undefined symbol {} to {}!", source.0, dest.0)
