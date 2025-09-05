@@ -6,18 +6,23 @@ use crate::errors::log_and_return_err;
 
 use std::any::{Any, type_name};
 use std::collections::HashMap;
+use dyn_clone::{DynClone, clone_box};
 
 #[derive(Hash, Clone, Eq, PartialEq, Debug)]
 pub struct Symbol(pub String);
 
-pub struct Data(Box<dyn Any>);
+pub struct Data(pub Box<dyn DynClone>);
 
 impl Data {
-    pub fn as_type<T: 'static>(&self) -> Result<&T, String> {
+    pub fn as_type<T: 'static + DynClone>(&self) -> Result<&T, String> {
         match self.0.downcast_ref::<T>() {
             Some(result) => Ok(result),
             None => log_and_return_err!("Could not downcast data to {}!", type_name::<T>())
         }
+    }
+
+    pub fn clone(&self) -> Data {
+        Data(clone_box(&*self.0))
     }
 }
 
@@ -42,8 +47,8 @@ impl Memory {
 
     // Read from the given symbol
     // If the symbol does not exist, return an error
-    pub fn read(&self, symbol: Symbol) -> Result<&Data, String> {
-        let data = self.0.get(&symbol);
+    pub fn read(&self, symbol: &Symbol) -> Result<&Data, String> {
+        let data = self.0.get(symbol);
         match data {
             Some(good_data) => Ok(good_data),
             None => log_and_return_err!("Tried to read from an undefined symbol!")

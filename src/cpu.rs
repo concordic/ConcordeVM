@@ -1,7 +1,7 @@
 // This is where code gets read and executed
 
 use crate::errors::log_and_return_err;
-use crate::instructions::Instruction;
+use crate::instructions::{Instruction, execute_instruction};
 use crate::memory::*;
 
 use log::{info, warn, error};
@@ -37,6 +37,8 @@ impl CPU {
                         self.stack.pop();
                         return Ok(true);
                     }
+                    let instruction = &instruction_vec[exec_pointer.index].clone();
+                    execute_instruction(instruction, &mut self.memory);
                     Ok(true)
                 }
                 Err(e) => log_and_return_err!("Couldn't get instruction data due to previous error:\n\t => {}", e)
@@ -54,7 +56,7 @@ impl CPU {
         memory: &'a Memory,
         exec_pointer: &ExecutionPointer
     ) -> Result<&'a Vec<Instruction>, String> {
-        match memory.read(exec_pointer.symbol.clone()) {
+        match memory.read(&exec_pointer.symbol) {
             Ok(instruction_data) => {
                 if let Ok(instruction_vec) = instruction_data.as_type::<Vec<Instruction>>() {
                     Ok(instruction_vec)

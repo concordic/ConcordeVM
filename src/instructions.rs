@@ -9,22 +9,42 @@ use crate::memory::*;
 use log::{info, warn};
 use std::any::Any;
 
+#[derive(Clone)]
 pub enum Instruction {
-    WriteDataToSymbol(Symbol, Data),
+    WriteStringToSymbol(Symbol, String),
+    WriteUSizeToSymbol(Symbol, usize),
+    CopySymbol(Symbol, Symbol),
     PrintSymbol(Symbol),
+    NoOp(),
 }
 
-pub fn executeInstruction(instruction: Instruction, memory: &mut Memory) {
+pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory) {
     match instruction {
-        Instruction::WriteDataToSymbol(symbol, value) => writeDataToSymbol(memory, symbol, value),
-        Instruction::PrintSymbol(symbol) => printSymbol(memory as &Memory, symbol),
+        Instruction::WriteStringToSymbol(symbol, value) => write_string_to_symbol(memory, symbol, value),
+        Instruction::WriteUSizeToSymbol(symbol, value) => write_usize_to_symbol(memory, symbol, value),
+        Instruction::CopySymbol(symbol_source, symbol_dest) => copy_symbol(memory, symbol_source, symbol_dest),
+        Instruction::PrintSymbol(symbol) => print_symbol(memory, symbol),
+        Instruction::NoOp() => {},
     }
 }
 
-fn writeDataToSymbol(memory: &mut Memory, symbol: Symbol, value: Data) {
-
+fn write_string_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &String) {
+    let data = Data(Box::new(value.clone()));
+    memory.write(symbol.clone(), data);
 }
 
-fn printSymbol(memory: &Memory, symbol: Symbol) {
+fn write_usize_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &usize) {
+    let data = Data(Box::new(value.clone()));
+    memory.write(symbol.clone(), data);
+}
 
+fn copy_symbol(memory: &mut Memory, symbol_source: &Symbol, symbol_dest: &Symbol) {
+    match memory.read(symbol_source) {
+        Ok(val) => memory.write(symbol_dest.clone(), val.clone()),
+        Err(e) => panic!("{}", e)
+    }
+}
+
+fn print_symbol(memory: &Memory, symbol: &Symbol) {
+    
 }

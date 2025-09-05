@@ -5,7 +5,7 @@ macro_rules! log_and_return_err {
         {
             let msg = format!($($t)*);
             log::error!("{}", msg);
-            Err(msg)
+            return Err(msg);
         }
     };
 }
