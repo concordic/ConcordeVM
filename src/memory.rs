@@ -1,6 +1,7 @@
 //! ConcordeVM's Memory system.
 //! 
 //! Provides a symbol table that acts as ConcordeVM's "RAM"
+//! 
 //! We chose to use a symbol table because it's an inherently safer form of memory, especially
 //! once we implement proper scoping for it, since you cannot access memory without having access
 //! to the symbol you need.
@@ -16,7 +17,7 @@ use dyn_clone::clone_box;
 // `Symbol`s represent the "address" of data in memory.
 //
 // Currently, they are just `String` wrappers, but that may change in the future as we implement
-// things like scoping
+// things like scoping and permissions
 #[derive(Hash, Clone, Eq, PartialEq, Debug)]
 pub struct Symbol(pub String);
 
