@@ -5,7 +5,7 @@ version = "0.1.0"
 authors = ["PerfectlyInternal"]
 edition = "2024"
 repository = "https://github.com/concordic/ConcordeVM"
-license = "MIT"
+license-file = "LICENSE"
 
 [lib]
 name = "concordevm_lib"
