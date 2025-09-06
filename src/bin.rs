@@ -1,6 +1,6 @@
 //! ConcordeVM's binary version.
 
-use concordevm_lib::{cpu, memory, instructions};
+use concordevm_lib::{cpu, concordeisa::{instructions, memory}};
 
 fn main() {
     colog::init();

@@ -99,11 +99,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "concordeisa"
+version = "0.1.0"
+source = "git+https://github.com/concordic/ConcordeISA.git?tag=v0.1.0#92392f8279f63fdc4e4e882610d5d9bea2ed4c25"
+
+[[package]]
 name = "concordevm"
 version = "0.1.0"
 dependencies = [
  "cloneable-any",
  "colog",
+ "concordeisa",
  "dyn-clone",
  "log",
 ]

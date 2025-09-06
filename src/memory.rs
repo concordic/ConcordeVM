@@ -8,18 +8,13 @@
 
 use crate::log_and_return_err;
 
+use concordeisa::{memory::Symbol};
+
 use std::any::type_name;
 use std::collections::HashMap;
 use log::error;
 use cloneable_any::CloneableAny;
 use dyn_clone::clone_box;
-
-// `Symbol`s represent the "address" of data in memory.
-//
-// Currently, they are just `String` wrappers, but that may change in the future as we implement
-// things like scoping and permissions
-#[derive(Hash, Clone, Eq, PartialEq, Debug)]
-pub struct Symbol(pub String);
 
 // `Data` is a wrapper struct for the actual data stored in memory.
 //

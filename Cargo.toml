@@ -17,6 +17,7 @@ name = "concordevm"
 path = "src/bin.rs"
 
 [dependencies]
+concordeisa = { git = "https://github.com/concordic/ConcordeISA.git", tag = "v0.1.0" }
 log = "0.4.28"
 colog = "1.3.0"
 cloneable-any = "0.1.0"

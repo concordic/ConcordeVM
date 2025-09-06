@@ -1,57 +1,14 @@
-//! ConcordeVM's instruction set.
+//! ConcordeVM's instruction set implementation.
 //!
-//! Provides an enum of possible instructions, as well as a means to map those instructions to
-//! functions to execute them.
-//!
-//! Instructions should generally be as simple as necessary. Unless there is a major advantage to
-//! doing so, instructions should not be possible to construct out of other instructions. (eg. no
-//! need to implement an instruction that adds 3 numbers together instead of 2, since you can do
-//! that with the 2 number addition just fine)
+//! Provides a function to execute arbitrary instructions as defined by the ConcordeISA. 
 
-use crate::memory::{Symbol, Data, Memory};
+use crate::memory::{Data, Memory};
 use crate::cpu::ExecutionStack;
 use crate::log_and_return_err;
 
+use concordeisa::{instructions::Instruction, memory::Symbol};
+
 use log::{info, error};
-
-// The `Instruction` enum provides a set of instructions that the ConcordeVM can execute.
-//
-// Each instruction also has its parameters, which can be either `Symbol`s, or Rust primitives.
-// Instruction names should be self-explanatory, since we want to avoid having excessively complex
-// instructions anyways.
-//
-// We may move away from allowing Rust primitves, since they currently only function to load
-// literals into memory. We can, in theory, replace this with an external loader that runs when
-// code is loaded into memory.
-#[allow(dead_code)]
-#[derive(Clone,  Debug)]
-pub enum Instruction {
-    // Immediate writes
-    WriteStringToSymbol(Symbol, String),
-    WriteIntToSymbol(Symbol, i64),
-    WriteBoolToSymbol(Symbol, bool),
-
-    // Memory management
-    CopySymbol(Symbol, Symbol),
-    
-    // Logic & arithmetic
-    AddSymbols(Symbol, Symbol, Symbol), // Add the first 2 symbols and put the result in the 3rd
-    SubtractSymbols(Symbol, Symbol, Symbol), // Subtract the 2nd symbol from the 1st and put the result in the 3rd
-    CompareEqual(Symbol, Symbol, Symbol), // Compare the first 2 symbols and put the result in the 3rd
-    CompareGreater(Symbol, Symbol, Symbol), // Compare the first 2 symbols and put the result in the 3rd
-    CompareLesser(Symbol, Symbol, Symbol), // Compare the first 2 symbols and put the result in the 3rd
-
-    // I/O
-    PrintSymbol(Symbol),
-
-    // Flow control
-    Jump(Symbol), // Jump to this symbol
-    JumpIfTrue(Symbol, Symbol), // if the first symbol is zero, jump to the second symbol
-    Return(), // Return to the previous symbol
-
-    // Misc.
-    NoOp(),
-}
 
 // Execute the given instruction and increment the execution pointer.
 // Return an error if something goes wrong. (eg. division by zero, or accessing invalid memory)

@@ -5,8 +5,10 @@
 //!
 //! Instructions are stored as `Vec<Instruction>`s under symbols in memory. 
 
-use crate::instructions::{Instruction, execute_instruction};
+use crate::instructions::execute_instruction;
 use crate::memory::*;
+
+use concordeisa::{instructions::Instruction, memory::Symbol};
 
 use log::info;
 use std::vec::Vec;
