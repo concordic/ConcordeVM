@@ -25,7 +25,7 @@ pub struct Symbol(pub String);
 //
 // It wraps a `Box<dyn CloneableAny>`, which allows any cloneable type to be stored in it, on the
 // heap. Data stored in memory must be cloneable, as we need to be able to clone it to get owned
-// copies when performing certain operations. 
+// copies when performing certain operations.
 pub struct Data(Box<dyn CloneableAny>);
 
 impl Data {
@@ -46,14 +46,16 @@ impl Data {
             None => log_and_return_err!("Could not downcast data to {}!", type_name::<T>())
         }
     }
+}
 
-    // Get a reference to the inner value.
-    pub fn as_ref(&self) -> &dyn CloneableAny {
+impl AsRef<dyn CloneableAny> for Data {
+    fn as_ref(&self) -> &dyn CloneableAny {
         self.0.as_ref()
     }
+}
 
-    // Create a new `Data` with a clone of the contents of this one. 
-    pub fn clone(&self) -> Data {
+impl Clone for Data {
+    fn clone(&self) -> Data {
         Data(clone_box(self.as_ref()))
     }
 }
@@ -123,6 +125,10 @@ impl Memory {
             None => log_and_return_err!("Couldn't copy undefined symbol {} to {}!", source.0, dest.0)
         }
     }
-
 }
 
+impl Default for Memory {
+   fn default() -> Self {
+       Memory::new()
+   } 
+}

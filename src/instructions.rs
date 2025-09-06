@@ -10,6 +10,7 @@
 
 use crate::memory::{Symbol, Data, Memory};
 use crate::cpu::ExecutionStack;
+use crate::log_and_return_err;
 
 use log::{info, error};
 

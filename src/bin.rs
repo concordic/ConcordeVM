@@ -1,8 +1,6 @@
-#[macro_use]
-mod errors;
-mod cpu;
-mod memory;
-mod instructions;
+//! ConcordeVM's binary version.
+
+use concordevm_lib::{cpu, memory, instructions};
 
 fn main() {
     colog::init();

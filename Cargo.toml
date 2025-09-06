@@ -1,7 +1,20 @@
 [package]
 name = "concordevm"
+description = "The Concorde Virtual Machine" 
 version = "0.1.0"
+authors = ["PerfectlyInternal"]
 edition = "2024"
+repository = "https://github.com/concordic/ConcordeVM"
+license = "MIT"
+
+[lib]
+name = "concordevm_lib"
+path = "src/lib.rs"
+crate-type = ["lib"]
+
+[[bin]]
+name = "concordevm"
+path = "src/bin.rs"
 
 [dependencies]
 log = "0.4.28"

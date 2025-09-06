@@ -123,3 +123,9 @@ impl CPU {
         }
     }
 }
+
+impl Default for CPU {
+   fn default() -> Self {
+       CPU::new()
+   } 
+}
