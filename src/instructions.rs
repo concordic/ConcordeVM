@@ -10,12 +10,12 @@ use concordeisa::{instructions::Instruction, memory::Symbol};
 
 use log::{info, error};
 
-// Execute the given instruction and increment the execution pointer.
-// Return an error if something goes wrong. (eg. division by zero, or accessing invalid memory)
+/// Execute the given instruction and increment the execution pointer.
+/// Return an error if something goes wrong. (eg. division by zero, or accessing invalid memory)
 //
-// Currently, each instruction from the enum maps to a function of the same name in a `match` statement. There
-// may be a better way to do this that's more extensible. We also handle incrementing the stack
-// only when we need to in the same way, so there's room for improvement.
+/// Currently, each instruction from the enum maps to a function of the same name in a `match` statement. There
+/// may be a better way to do this that's more extensible. We also handle incrementing the stack
+/// only when we need to in the same way, so there's room for improvement.
 pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory, stack: &mut ExecutionStack) -> Result<(), String> {
     info!("Executing instruction {:?}", instruction);
     let result = match instruction {
@@ -59,32 +59,32 @@ pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory, stack
     result
 }
 
-// Write a `String` literal to a symbol.
+/// Write a `String` literal to a symbol.
 fn write_string_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &String) -> Result<(), String> {
     memory.write(symbol, Data::new(value));
     Ok(())
 }
 
-// Write an `i64` literal to a symbol.
+/// Write an `i64` literal to a symbol.
 fn write_int_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &i64) -> Result<(), String> {
     memory.write(symbol, Data::new(value));
     Ok(())
 }
 
-// Write a `bool` literal to a symbol.
+/// Write a `bool` literal to a symbol.
 fn write_bool_to_symbol(memory: &mut Memory, symbol: &Symbol, value: &bool) -> Result<(), String> {
     memory.write(symbol, Data::new(value));
     Ok(())
 }
 
-// Copy the data in `source` to `dest`. Returns an error if `source` is undefined.
+/// Copy the data in `source` to `dest`. Returns an error if `source` is undefined.
 fn copy_symbol(memory: &mut Memory, source: &Symbol, dest: &Symbol) -> Result<(), String> {
     memory.copy(source, dest)?;
     Ok(())
 }
 
-// Add the integers in `a` and `b` together, and put the result in `dest`.
-// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
+/// Add the integers in `a` and `b` together, and put the result in `dest`.
+/// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
 fn add_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
     let a_data = memory.read_typed::<i64>(a)?;
     let b_data = memory.read_typed::<i64>(b)?;
@@ -93,8 +93,8 @@ fn add_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Re
     Ok(())
 }
 
-// Subtract the integer in `b` from `a`, and put the result in `dest`.
-// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
+/// Subtract the integer in `b` from `a`, and put the result in `dest`.
+/// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
 fn subtract_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
     let a_data = memory.read_typed::<i64>(a)?;
     let b_data = memory.read_typed::<i64>(b)?;
@@ -103,8 +103,8 @@ fn subtract_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) 
     Ok(())
 }
 
-// Check if the integers in `a` and `b` are equal, and put the result in `dest` 
-// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
+/// Check if the integers in `a` and `b` are equal, and put the result in `dest` 
+/// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
 fn compare_equal(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
     let a_data = memory.read_typed::<i64>(a)?;
     let b_data = memory.read_typed::<i64>(b)?;
@@ -113,8 +113,8 @@ fn compare_equal(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> 
     Ok(())
 }
 
-// Check if the integer in `a` is greater than in `b`, and put the result in `dest` 
-// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
+/// Check if the integer in `a` is greater than in `b`, and put the result in `dest` 
+/// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
 fn compare_greater(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
     let a_data = memory.read_typed::<i64>(a)?;
     let b_data = memory.read_typed::<i64>(b)?;
@@ -123,8 +123,8 @@ fn compare_greater(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -
     Ok(())
 }
 
-// Check if the integer in `a` is lesser than in `b`, and put the result in `dest` 
-// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
+/// Check if the integer in `a` is lesser than in `b`, and put the result in `dest` 
+/// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
 fn compare_lesser(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
     let a_data = memory.read_typed::<i64>(a)?;
     let b_data = memory.read_typed::<i64>(b)?;
@@ -133,13 +133,13 @@ fn compare_lesser(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) ->
     Ok(())
 }
 
-// Jump execution to the target symbol. Will not error.
+/// Jump execution to the target symbol. Will not error.
 fn jump(stack: &mut ExecutionStack, target: &Symbol) -> Result<(), String> {
     stack.jump(target);
     Ok(())
 }
 
-// Jump execution to the target if the condition is true. Will not error.
+/// Jump execution to the target if the condition is true. Will not error.
 fn jump_if_true(memory: &mut Memory, stack: &mut ExecutionStack, target: &Symbol, condition: &Symbol) -> Result<(), String> {
     let c = memory.read_typed::<bool>(condition)?;
     if *c {
@@ -150,14 +150,14 @@ fn jump_if_true(memory: &mut Memory, stack: &mut ExecutionStack, target: &Symbol
     Ok(())
 }
 
-// Return execution to the last symbol. Will not error.
+/// Return execution to the last symbol. Will not error.
 fn ret(stack: &mut ExecutionStack) -> Result<(), String> {
     stack.ret();
     Ok(())
 }
 
-// Print the data at the symbol to the console. Returns an error if the data is not a printable
-// type (currently either a `String`, `i64`, or `bool`)
+/// Print the data at the symbol to the console. Returns an error if the data is not a printable
+/// type (currently either a `String`, `i64`, or `bool`)
 fn print_symbol(memory: &Memory, symbol: &Symbol) -> Result<(), String> {
     let data = memory.read_untyped(symbol)?;
     if data.is::<String>() {

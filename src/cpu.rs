@@ -13,52 +13,52 @@ use concordeisa::{instructions::Instruction, memory::Symbol};
 use log::info;
 use std::vec::Vec;
 
-// `ExecutionPointer`s represent a location in memory where code is being executed.
-//
-// Contains the symbol under which the instructions are stored, as well as the index of the
-// instruction currently being executed.
+/// `ExecutionPointer`s represent a location in memory where code is being executed.
+///
+/// Contains the symbol under which the instructions are stored, as well as the index of the
+/// instruction currently being executed.
 pub struct ExecutionPointer {
     symbol: Symbol,
     index: usize,
 }
 
-// The `ExecutionStack` is the stack of the CPU. It stores `ExecutionPointer`s to every block of
-// code being executed at any moment. 
+/// The `ExecutionStack` is the stack of the CPU. It stores `ExecutionPointer`s to every block of
+/// code being executed at any moment. 
 pub struct ExecutionStack(Vec<ExecutionPointer>);
 
 impl ExecutionStack {
-    // Delete everything in the stack.
+    /// Delete everything in the stack.
     pub fn clear(&mut self) {
         self.0.clear();
     }
 
-    // Get the top pointer on the stack. Returns None if the stack is empty.
+    /// Get the top pointer on the stack. Returns None if the stack is empty.
     pub fn top(&self) -> Option<&ExecutionPointer>{
         self.0.last()
     }
 
-    // Increment the index of the top pointer on the stack.
+    /// Increment the index of the top pointer on the stack.
     pub fn increment(&mut self) {
         self.0.last_mut().unwrap().index += 1;
     }
 
-    // Jump execution to a given symbol. Will not error, even if the symbol is undefined.
+    /// Jump execution to a given symbol. Will not error, even if the symbol is undefined.
     pub fn jump(&mut self, target: &Symbol) {
         info!("Jumped to {}!", target.0);
         self.0.push(ExecutionPointer { symbol: target.clone(), index: 0 });
     }
 
-    // Return execution to the previous location. Will not error.
+    /// Return execution to the previous location. Will not error.
     pub fn ret(&mut self) {
         info!("Returned!");
         self.0.pop();
     }
 }
 
-// The `CPU` is where instruction reading and execution is handled.
-//
-// Contains `Memory`, as well as an `ExecutionStack`. These are used to read and execute
-// instructions. 
+/// The `CPU` is where instruction reading and execution is handled.
+///
+/// Contains `Memory`, as well as an `ExecutionStack`. These are used to read and execute
+/// instructions. 
 #[allow(clippy::upper_case_acronyms)]
 pub struct CPU {
     memory: Memory,
@@ -66,7 +66,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    // Create a new `CPU`. Initializes both the memory and stack to be empty.
+    /// Create a new `CPU`. Initializes both the memory and stack to be empty.
     pub fn new() -> CPU {
         CPU {
             memory: Memory::new(),
@@ -74,32 +74,32 @@ impl CPU {
         }
     }
     
-    // Load instructions into memory at a given symbol.
+    /// Load instructions into memory at a given symbol.
     pub fn load_instructions(&mut self, instructions: &Vec<Instruction>, symbol: &Symbol) {
         self.memory.write(symbol, Data::new(instructions));
         info!("Loaded {} instructions into symbol {}", instructions.len(), symbol.0);
     }
 
-    // Get the CPU ready to start executing code. Clears the stack and jumps to the entrypoint.
+    /// Get the CPU ready to start executing code. Clears the stack and jumps to the entrypoint.
     pub fn init_execution(&mut self, entrypoint: &Symbol) {
         self.stack.clear();
         self.stack.jump(entrypoint);
     }
 
-    // Complete one CPU cycle. Returns false iff the stack is empty. Returns an error if something
-    // goes wrong during execution. Returns true otherwise.
-    //
-    // Each CPU cycle does the following:
-    //   - Checks if the stack is empty. If it is, return false. If not, continue.
-    //   - Reads the instructions that the `ExecutionPointer` at the top of the stack points to.
-    //   - If we're done execution there, return from that block, and return true. 
-    //   - Otherwise, read the instruction at the given index and execute it.
-    //   - If the instruction errors, return the error. Otherwise, return true.
-    //
-    // One CPU cycle does not necessarily map to one instruction, as a CPU cycle is used every time
-    // we pop an execution pointer off of the stack when we are done executing those instructions. This is
-    // technically equivalent to every instruction vector having a return instruction tacked on at
-    // the end, but isn't handled the same way.
+    /// Complete one CPU cycle. Returns false iff the stack is empty. Returns an error if something
+    /// goes wrong during execution. Returns true otherwise.
+    ///
+    /// Each CPU cycle does the following:
+    ///   - Checks if the stack is empty. If it is, return false. If not, continue.
+    ///   - Reads the instructions that the `ExecutionPointer` at the top of the stack points to.
+    ///   - If we're done execution there, return from that block, and return true. 
+    ///   - Otherwise, read the instruction at the given index and execute it.
+    ///   - If the instruction errors, return the error. Otherwise, return true.
+    ///
+    /// One CPU cycle does not necessarily map to one instruction, as a CPU cycle is used every time
+    /// we pop an execution pointer off of the stack when we are done executing those instructions. This is
+    /// technically equivalent to every instruction vector having a return instruction tacked on at
+    /// the end, but isn't handled the same way.
     pub fn cycle(&mut self) -> Result<bool, String> {
         if let Some(exec_pointer) = self.stack.top() {
             info!("Currently executing code at symbol [{}], index {}", exec_pointer.symbol.0, exec_pointer.index);
