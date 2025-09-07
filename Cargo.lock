@@ -105,7 +105,7 @@ source = "git+https://github.com/concordic/ConcordeISA.git?tag=v0.1.0#92392f8279
 
 [[package]]
 name = "concordevm"
-version = "0.1.0"
+version = "0.3.1"
 dependencies = [
  "cloneable-any",
  "colog",
