@@ -18,8 +18,8 @@ use std::vec::Vec;
 /// Contains the symbol under which the instructions are stored, as well as the index of the
 /// instruction currently being executed.
 pub struct ExecutionPointer {
-    symbol: Symbol,
-    index: usize,
+    pub symbol: Symbol,
+    pub index: usize,
 }
 
 /// The `ExecutionStack` is the stack of the CPU. It stores `ExecutionPointer`s to every block of

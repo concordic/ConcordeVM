@@ -1,11 +1,12 @@
 //! ConcordeVM's binary version.
 
-use concordevm_lib::{cpu, concordeisa::{instructions, memory}};
+use concordeisa::{instructions, memory};
+use concordevm_lib::CPU;
 
 fn main() {
     colog::init();
 
-    let mut cpu = cpu::CPU::new();
+    let mut cpu = CPU::new();
     let main = vec![
         instructions::Instruction::WriteStringToSymbol(memory::Symbol("hello_world".to_string()), "Hello World! A > B!".to_string()),
         instructions::Instruction::WriteStringToSymbol(memory::Symbol("hello_concorde".to_string()), "Hello ConcordeVM! A < B!".to_string()),

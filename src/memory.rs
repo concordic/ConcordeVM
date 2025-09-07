@@ -12,6 +12,7 @@ use concordeisa::{memory::Symbol};
 
 use std::any::type_name;
 use std::collections::HashMap;
+use std::collections::hash_map::Keys;
 use log::error;
 use cloneable_any::CloneableAny;
 use dyn_clone::clone_box;
@@ -119,6 +120,12 @@ impl Memory {
             }
             None => log_and_return_err!("Couldn't copy undefined symbol {} to {}!", source.0, dest.0)
         }
+    }
+
+    /// Get an iterator over all of the symbols currently in memory. Useful for debugging purposes.
+    #[allow(dead_code)]
+    pub fn symbols(&self) -> Keys<Symbol, Data> {
+        self.0.keys()
     }
 }
 

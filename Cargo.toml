@@ -7,6 +7,9 @@ edition = "2024"
 repository = "https://github.com/concordic/ConcordeVM"
 license-file = "LICENSE"
 
+[features]
+debug-visibility = []
+
 [lib]
 name = "concordevm_lib"
 path = "src/lib.rs"
