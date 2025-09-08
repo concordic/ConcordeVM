@@ -17,6 +17,7 @@ use std::vec::Vec;
 ///
 /// Contains the symbol under which the instructions are stored, as well as the index of the
 /// instruction currently being executed.
+#[derive(Clone, Eq, PartialEq)]
 pub struct ExecutionPointer {
     pub symbol: Symbol,
     pub index: usize,
@@ -24,9 +25,15 @@ pub struct ExecutionPointer {
 
 /// The `ExecutionStack` is the stack of the CPU. It stores `ExecutionPointer`s to every block of
 /// code being executed at any moment. 
+#[derive(Clone)]
 pub struct ExecutionStack(Vec<ExecutionPointer>);
 
 impl ExecutionStack {
+    /// Create a new empty `ExecutionStack`.
+    pub fn new() -> ExecutionStack {
+        ExecutionStack(Vec::new())
+    }
+
     /// Delete everything in the stack.
     pub fn clear(&mut self) {
         self.0.clear();
@@ -53,12 +60,16 @@ impl ExecutionStack {
         info!("Returned!");
         self.0.pop();
     }
+
+    pub fn dump(&self) -> Vec<ExecutionPointer> {
+        self.0.clone()
+    }
 }
 
 /// The `CPU` is where instruction reading and execution is handled.
 ///
 /// Contains `Memory`, as well as an `ExecutionStack`. These are used to read and execute
-/// instructions. 
+/// instructions.
 #[allow(clippy::upper_case_acronyms)]
 pub struct CPU {
     memory: Memory,
@@ -70,7 +81,7 @@ impl CPU {
     pub fn new() -> CPU {
         CPU {
             memory: Memory::new(),
-            stack: ExecutionStack(Vec::new()),
+            stack: ExecutionStack::new(),
         }
     }
     
@@ -123,6 +134,16 @@ impl CPU {
             info!("CPU Stack is empty!");
             Ok(false)
         }
+    }
+
+    /// Get a clone of the memory for debugging.
+    pub fn get_memory(&self) -> Memory {
+        self.memory.clone()
+    }
+
+    /// Get a clone of the stack for debugging.
+    pub fn get_stack(&self) -> ExecutionStack {
+        self.stack.clone()
     }
 }
 

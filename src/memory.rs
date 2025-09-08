@@ -12,7 +12,6 @@ use concordeisa::{memory::Symbol};
 
 use std::any::type_name;
 use std::collections::HashMap;
-use std::collections::hash_map::Keys;
 use log::error;
 use cloneable_any::CloneableAny;
 use dyn_clone::clone_box;
@@ -60,6 +59,7 @@ impl Clone for Data {
 ///
 /// It wraps a `HashMap<Symbol, Data>` and implements basic memory operations over that, including
 /// both typed and untyped reading, writing, and copying.
+#[derive(Clone)]
 pub struct Memory(HashMap<Symbol, Data>);
 
 impl Memory {
@@ -123,9 +123,8 @@ impl Memory {
     }
 
     /// Get an iterator over all of the symbols currently in memory. Useful for debugging purposes.
-    #[allow(dead_code)]
-    pub fn symbols(&self) -> Keys<Symbol, Data> {
-        self.0.keys()
+    pub fn dump(&self) -> HashMap<Symbol, Data> {
+        self.0.clone()
     }
 }
 

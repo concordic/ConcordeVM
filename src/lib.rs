@@ -1,17 +1,13 @@
 //! ConcordeVM's library version.
 
 mod cpu;
-pub use cpu::CPU; 
-
-#[cfg(feature = "debug-visibility")]
 pub use cpu::{
+    CPU,
     ExecutionPointer,
     ExecutionStack,
 };
 
 mod memory;
-
-#[cfg(feature = "debug-visibility")]
 pub use memory::{
     Data,
     Memory,
