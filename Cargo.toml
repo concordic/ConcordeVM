@@ -1,7 +1,7 @@
 [package]
 name = "concordevm"
 description = "The Concorde Virtual Machine" 
-version = "0.3.1"
+version = "0.3.2"
 authors = ["PerfectlyInternal"]
 edition = "2024"
 repository = "https://github.com/concordic/ConcordeVM"
