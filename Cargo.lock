@@ -101,11 +101,12 @@ dependencies = [
 [[package]]
 name = "concordeisa"
 version = "0.1.0"
-source = "git+https://github.com/concordic/ConcordeISA.git?tag=v0.1.0#92392f8279f63fdc4e4e882610d5d9bea2ed4c25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8eea7393b61e49548522562235238f30fa8864df6fb3a063fef8c6ec2e6a10d"
 
 [[package]]
 name = "concordevm"
-version = "0.3.2"
+version = "0.1.0"
 dependencies = [
  "cloneable-any",
  "colog",

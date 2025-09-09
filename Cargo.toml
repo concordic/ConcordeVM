@@ -1,27 +1,20 @@
 [package]
 name = "concordevm"
 description = "The Concorde Virtual Machine" 
-version = "0.3.2"
+version = "0.1.0"
 authors = ["PerfectlyInternal"]
 edition = "2024"
 repository = "https://github.com/concordic/ConcordeVM"
 license-file = "LICENSE"
-
-[features]
-debug-visibility = []
 
 [lib]
 name = "concordevm_lib"
 path = "src/lib.rs"
 crate-type = ["lib"]
 
-[[bin]]
-name = "concordevm"
-path = "src/bin.rs"
-
 [dependencies]
-concordeisa = { git = "https://github.com/concordic/ConcordeISA.git", tag = "v0.1.0" }
-log = "0.4.28"
-colog = "1.3.0"
+concordeisa = "0.1.0"
 cloneable-any = "0.1.0"
 dyn-clone = "1.0.20"
+log = "0.4.28"
+colog = "1.3.0"
