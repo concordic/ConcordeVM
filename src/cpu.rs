@@ -61,6 +61,15 @@ impl ExecutionStack {
         self.0.pop();
     }
 
+    /// if goto is valid, sets symbol to new location and index to 0 to begin at top of instruction stack
+    pub fn goto(&mut self, target: &Symbol) {
+        if let Some(pointer) = self.0.last_mut() {
+            info!("Goto {}!", target.0);//goto symbol
+            pointer.symbol = target.clone();
+            pointer.index = 0;
+        }
+    }
+
     pub fn dump(&self) -> Vec<ExecutionPointer> {
         self.0.clone()
     }
