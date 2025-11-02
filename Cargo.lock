@@ -166,9 +166,9 @@ dependencies = [
 
 [[package]]
 name = "concordeisa"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f594252cd9160d2bbdae93c9281c21600b34d8363d6cbd783d40df8271e862e"
+checksum = "bf8b275e15cce6f21a56ad3b826ea5bfe01d3adf6cfd3363ef13260114bfd296"
 
 [[package]]
 name = "concordevm"

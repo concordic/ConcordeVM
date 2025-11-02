@@ -18,3 +18,6 @@ mod instructions;
 
 #[macro_use]
 mod errors;
+
+#[cfg(test)]
+mod tests;

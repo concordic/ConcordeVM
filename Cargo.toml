@@ -13,7 +13,7 @@ path = "src/lib.rs"
 crate-type = ["lib"]
 
 [dependencies]
-concordeisa = "0.2.0"
+concordeisa = "0.2.1"
 cloneable-any = "0.1.0"
 dyn-clone = "1.0.20"
 log = "0.4.28"

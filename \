@@ -179,8 +179,8 @@ fn close_stream(io: &mut ConcordeIO, stream: &Symbol) -> Result<(), String> {
 
 /// Read `n` bytes from `stream` and put the result in `dest`.
 fn read_stream(memory: &mut Memory, io: &mut ConcordeIO, stream: &Symbol, n: &Symbol, dest: &Symbol) -> Result<(), String> {
-    let n_data = memory.read_typed::<i64>(n)?;
-    let (read_data, _read_n) = io.read(stream, usize::try_from(*n_data).unwrap())?;
+    let n_data = memory.read_typed::<usize>(n)?;
+    let (read_data, _read_n) = io.read(stream, *n_data)?;
     memory.write(dest, Data::new(&read_data));
     Ok(())
 }
@@ -188,7 +188,7 @@ fn read_stream(memory: &mut Memory, io: &mut ConcordeIO, stream: &Symbol, n: &Sy
 /// Write `n` bytes from `src` into `stream`.
 fn write_stream(memory: &mut Memory, io: &mut ConcordeIO, stream: &Symbol, n: &Symbol, src: &Symbol) -> Result<(), String> {
     let write_data = memory.read_typed::<Vec<u8>>(src)?;
-    let n_data = memory.read_typed::<i64>(n)?;
-    io.write(stream, &write_data[..usize::try_from(*n_data).unwrap()])?;
+    let n_data = memory.read_typed::<usize>(n)?;
+    io.write(stream, &write_data[..*n_data])?;
     Ok(())
 }
