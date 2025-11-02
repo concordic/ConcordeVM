@@ -5,7 +5,7 @@
 //!
 //! Instructions are stored as `Vec<Instruction>`s under symbols in memory. 
 
-use crate::instructions::execute_instruction;
+use crate::{instructions::execute_instruction, io::ConcordeIO};
 use crate::memory::*;
 
 use concordeisa::{instructions::Instruction, memory::Symbol};
@@ -73,6 +73,7 @@ impl ExecutionStack {
 #[allow(clippy::upper_case_acronyms)]
 pub struct CPU {
     memory: Memory,
+    io: ConcordeIO,
     stack: ExecutionStack,
 }
 
@@ -81,6 +82,7 @@ impl CPU {
     pub fn new() -> CPU {
         CPU {
             memory: Memory::new(),
+            io: ConcordeIO::new(),
             stack: ExecutionStack::new(),
         }
     }
@@ -126,7 +128,7 @@ impl CPU {
                 self.stack.increment();
             } else {
                 let instruction = &instruction_vec[exec_pointer.index].clone();
-                execute_instruction(instruction, &mut self.memory, &mut self.stack)?;
+                execute_instruction(instruction, &mut self.memory, &mut self.io, &mut self.stack)?;
             }
             Ok(true)
         }

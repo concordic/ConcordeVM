@@ -13,6 +13,7 @@ pub use memory::{
     Memory,
 };
 
+mod io;
 mod instructions;
 
 #[macro_use]

@@ -2,6 +2,7 @@
 //!
 //! Provides a function to execute arbitrary instructions as defined by the ConcordeISA. 
 
+use crate::io::{ConcordeIO, ConcordeStream};
 use crate::memory::{Data, Memory};
 use crate::cpu::ExecutionStack;
 use crate::log_and_return_err;
@@ -16,7 +17,7 @@ use log::{info, error};
 /// Currently, each instruction from the enum maps to a function of the same name in a `match` statement. There
 /// may be a better way to do this that's more extensible. We also handle incrementing the stack
 /// only when we need to in the same way, so there's room for improvement.
-pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory, stack: &mut ExecutionStack) -> Result<(), String> {
+pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory, io: &mut ConcordeIO, stack: &mut ExecutionStack) -> Result<(), String> {
     info!("Executing instruction {:?}", instruction);
     let result = match instruction {
         // Immediate writes
@@ -35,7 +36,10 @@ pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory, stack
         Instruction::CompareLesser(a, b, dest) => compare_lesser(memory, a, b, dest),
         
         // I/O
-        Instruction::PrintSymbol(symbol) => print_symbol(memory, symbol),
+        Instruction::OpenStream(name, stream) => open_stream(memory, io, name, stream),
+        Instruction::CloseStream(stream) => close_stream(io, stream),
+        Instruction::ReadStream(stream, n, dest) => read_stream(memory, io, stream, n, dest),
+        Instruction::WriteStream(stream, n, src) => write_stream(memory, io, stream, n, src),
         
         // Flow control
         Instruction::Jump(target) => jump(stack, target),
@@ -156,18 +160,26 @@ fn ret(stack: &mut ExecutionStack) -> Result<(), String> {
     Ok(())
 }
 
-/// Print the data at the symbol to the console. Returns an error if the data is not a printable
-/// type (currently either a `String`, `i64`, or `bool`)
-fn print_symbol(memory: &Memory, symbol: &Symbol) -> Result<(), String> {
-    let data = memory.read_untyped(symbol)?;
-    if data.is::<String>() {
-        println!("{}", data.downcast_ref::<String>().unwrap()); 
-    } else if data.is::<i64>() {
-        println!("{}", data.downcast_ref::<i64>().unwrap()); 
-    } else if data.is::<bool>() {
-        println!("{}", data.downcast_ref::<bool>().unwrap()); 
-    } else {
-        log_and_return_err!("Cannot print whatever type is in {}!", symbol.0)
-    }
+fn open_stream(memory: &mut Memory, io: &mut ConcordeIO, name: &Symbol, stream: &Symbol) -> Result<(), String> {
+    let name_data = memory.read_typed::<String>(name)?;
+    io.open(&Symbol(name_data.clone()))
+}
+
+fn close_stream(io: &mut ConcordeIO, stream: &Symbol) -> Result<(), String> {
+    io.close(stream)
+}
+
+fn read_stream(memory: &mut Memory, io: &mut ConcordeIO, stream: &Symbol, n: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let n_data = memory.read_typed::<usize>(n)?;
+    let (read_data, read_n) = io.read(stream, n_data.clone())?;
+    memory.write(dest, Data::new(&read_data));
+    Ok(())
+}
+
+fn write_stream(memory: &mut Memory, io: &mut ConcordeIO, stream: &Symbol, n: &Symbol, src: &Symbol) -> Result<(), String> {
+    let write_data = memory.read_typed::<Vec<u8>>(src)?;
+    let n_data = memory.read_typed::<usize>(n)?;
+    let n_bytes = n_data.clone();
+    io.write(stream, &write_data[..n_bytes])?;
     Ok(())
 }
