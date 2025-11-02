@@ -38,8 +38,8 @@ fn basic_io() {
     let n = Symbol("n".to_string());
     let instructions = vec![
         Instruction::WriteStringToSymbol(a.clone(), "stdio".to_string()),
-        Instruction::WriteBytesToSymbol(b.clone(), "test output".as_bytes().to_vec()),
-        Instruction::WriteIntToSymbol(n.clone(), 11),
+        Instruction::WriteBytesToSymbol(b.clone(), "test output\n".as_bytes().to_vec()),
+        Instruction::WriteIntToSymbol(n.clone(), 12),
         Instruction::OpenStream(a, s.clone()),
         Instruction::WriteStream(s.clone(), n, b),
     ];
