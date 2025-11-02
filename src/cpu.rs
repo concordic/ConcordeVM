@@ -28,6 +28,12 @@ pub struct ExecutionPointer {
 #[derive(Clone)]
 pub struct ExecutionStack(Vec<ExecutionPointer>);
 
+impl Default for ExecutionStack {
+    fn default() -> Self {
+        ExecutionStack::new()
+    }
+}
+
 impl ExecutionStack {
     /// Create a new empty `ExecutionStack`.
     pub fn new() -> ExecutionStack {

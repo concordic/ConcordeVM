@@ -21,8 +21,16 @@ pub struct ConcordeStream {
 }
 
 impl ConcordeStream {
+    /// Open a new stream
+    ///
+    /// Using the name "stdio" will open the standard in/out stream.
+    /// Other names will be interpreted as files.
+    /// File IO is handled as such:
+    ///   - The file on disk with the given name is opened for reading.
+    ///   - [filename].tmp is opened for writing.
+    ///   - If anything is ever written to the file, a flag is set.
+    ///   - When closing the file, if the above flag is set, [filename].tmp gets renamed to [filename].
     pub fn open(name: &String) -> Result<ConcordeStream, String> {
-        // "stdio" is a reserved name for stdin/stdout
         if name == "stdio" {
             return Ok(ConcordeStream {
                 name: name.clone(),
@@ -31,10 +39,10 @@ impl ConcordeStream {
                 has_written: false,
             })
         }
-        let file_read = File::options().read(true).write(false).open(&name);
+        let file_read = File::options().read(true).write(false).open(name);
         let mut out_name = name.clone();
         out_name.push_str(".tmp");
-        let file_write = File::options().read(false).write(true).open(&out_name);
+        let file_write = File::options().read(false).write(true).open(out_name);
         match (file_read, file_write) {
             (Ok(fr), Ok(fw)) => {
                 Ok(ConcordeStream {
@@ -48,6 +56,8 @@ impl ConcordeStream {
         }
     }
 
+    /// Attempt to read up to n bytes from the stream.
+    /// Returns the read data, as well as the number of bytes read.
     pub fn read(&mut self, n: usize) -> Result<(Vec<u8>, usize), String> {
         let mut buf: Vec<u8> = vec![0; n];
         match self.reader.read(&mut buf[..]) {
@@ -56,6 +66,8 @@ impl ConcordeStream {
         }
     }
 
+    /// Attempt to write all the contents of buf to the stream.
+    /// Returns the number of bytes written if successful.
     pub fn write(&mut self, buf: &[u8]) -> Result<usize, String>{
         match self.writer.write(buf) {
             Ok(n) => {
@@ -66,6 +78,8 @@ impl ConcordeStream {
         }
     }
 
+    /// Close the stream.
+    /// Copies the temporary file to replace the existing one if anything was written to it.
     pub fn close(self) -> Result<(), String> {
         drop(self.reader);
         drop(self.writer);
@@ -81,15 +95,18 @@ impl ConcordeStream {
     }
 }
 
+/// Concorde's IO interface. This is what the CPU uses to make IO calls.
 pub struct ConcordeIO(HashMap<Symbol, ConcordeStream>);
 
 impl ConcordeIO {
+    // Make a new empty IO interface.
     pub fn new() -> ConcordeIO {
         ConcordeIO(HashMap::new())
     }
 
-    pub fn open(&mut self, name: &Symbol) -> Result<(), String> {
-        let stream = ConcordeStream::open(&name.0);
+    /// Open `filename` under the symbol `name`.
+    pub fn open(&mut self, name: &Symbol, filename: String) -> Result<(), String> {
+        let stream = ConcordeStream::open(&filename);
         if stream.is_err() {
             log_and_return_err!("{}", stream.err().unwrap());
         }
@@ -97,6 +114,8 @@ impl ConcordeIO {
         Ok(())
     }
 
+    /// Read `n` bytes from the stream at the given symbol.
+    /// Returns the read data and the number of bytes read.
     pub fn read(&mut self, name: &Symbol, n: usize) -> Result<(Vec<u8>, usize), String> {
         match self.0.get_mut(name) {
             Some(stream) => stream.read(n),
@@ -104,6 +123,8 @@ impl ConcordeIO {
         }
     }
 
+    /// Write the contents of `buf` to the stream at the given symbol.
+    /// Returns the number of bytes written.
     pub fn write(&mut self, name: &Symbol, buf: &[u8]) -> Result<usize, String> {
         match self.0.get_mut(name) {
             Some(stream) => stream.write(buf),
@@ -111,6 +132,7 @@ impl ConcordeIO {
         }
     }
 
+    /// Close the given stream.
     pub fn close(&mut self, name: &Symbol) -> Result<(), String> {
         match self.0.remove(name) {
             Some(stream) => stream.close(),

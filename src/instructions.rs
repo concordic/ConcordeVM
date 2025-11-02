@@ -2,14 +2,13 @@
 //!
 //! Provides a function to execute arbitrary instructions as defined by the ConcordeISA. 
 
-use crate::io::{ConcordeIO, ConcordeStream};
+use crate::io::ConcordeIO;
 use crate::memory::{Data, Memory};
 use crate::cpu::ExecutionStack;
-use crate::log_and_return_err;
 
 use concordeisa::{instructions::Instruction, memory::Symbol};
 
-use log::{info, error};
+use log::info;
 
 /// Execute the given instruction and increment the execution pointer.
 /// Return an error if something goes wrong. (eg. division by zero, or accessing invalid memory)
@@ -160,26 +159,29 @@ fn ret(stack: &mut ExecutionStack) -> Result<(), String> {
     Ok(())
 }
 
+/// Open a stream in the IO interface.
 fn open_stream(memory: &mut Memory, io: &mut ConcordeIO, name: &Symbol, stream: &Symbol) -> Result<(), String> {
     let name_data = memory.read_typed::<String>(name)?;
-    io.open(&Symbol(name_data.clone()))
+    io.open(stream, name_data.clone())
 }
 
+// Close a stream in the IO interface.
 fn close_stream(io: &mut ConcordeIO, stream: &Symbol) -> Result<(), String> {
     io.close(stream)
 }
 
+/// Read `n` bytes from `stream` and put the result in `dest`.
 fn read_stream(memory: &mut Memory, io: &mut ConcordeIO, stream: &Symbol, n: &Symbol, dest: &Symbol) -> Result<(), String> {
     let n_data = memory.read_typed::<usize>(n)?;
-    let (read_data, read_n) = io.read(stream, n_data.clone())?;
+    let (read_data, _read_n) = io.read(stream, *n_data)?;
     memory.write(dest, Data::new(&read_data));
     Ok(())
 }
 
+/// Write `n` bytes from `src` into `stream`.
 fn write_stream(memory: &mut Memory, io: &mut ConcordeIO, stream: &Symbol, n: &Symbol, src: &Symbol) -> Result<(), String> {
     let write_data = memory.read_typed::<Vec<u8>>(src)?;
     let n_data = memory.read_typed::<usize>(n)?;
-    let n_bytes = n_data.clone();
-    io.write(stream, &write_data[..n_bytes])?;
+    io.write(stream, &write_data[..*n_data])?;
     Ok(())
 }
