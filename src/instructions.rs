@@ -43,6 +43,7 @@ pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory, io: &
         
         // Flow control
         Instruction::Jump(target) => jump(stack, target),
+        Instruction::Goto(target) => goto(stack, target),
         Instruction::JumpIfTrue(target, condition) => jump_if_true(memory, stack, target, condition),
         Instruction::Return() => ret(stack),
         
@@ -146,6 +147,10 @@ fn compare_lesser(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) ->
 /// Jump execution to the target symbol. Will not error.
 fn jump(stack: &mut ExecutionStack, target: &Symbol) -> Result<(), String> {
     stack.jump(target);
+    Ok(())
+}
+fn goto(stack: &mut ExecutionStack, target: &Symbol) -> Result<(), String> {
+    stack.goto(target);
     Ok(())
 }
 
