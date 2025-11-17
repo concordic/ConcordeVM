@@ -31,6 +31,18 @@ pub fn execute_instruction(instruction: &Instruction, memory: &mut Memory, io: &
         // Arithmetic
         Instruction::AddSymbols(a, b, dest) => add_symbols(memory, a, b, dest),
         Instruction::SubtractSymbols(a, b, dest) => subtract_symbols(memory, a, b, dest),
+        Instruction::MultiplySymbols(a, b, dest) => multiply_symbols(memory, a, b, dest),
+        Instruction::DivideSymbols(a, b, dest) => divide_symbols(memory, a, b, dest),
+        Instruction::ModuloSymbols(a, b, dest) => modulo_symbols(memory, a, b, dest),
+        Instruction::MinSymbols(a, b, dest) => min_symbols(memory, a, b, dest),
+        Instruction::MaxSymbols(a, b, dest) => max_symbols(memory, a, b, dest),
+        Instruction::FmaSymbols(a, b, c, dest) => fma_symbols(memory, a, b, c, dest),
+        Instruction::SinSymbol(a, dest) => sin_symbol(memory, a, dest),
+        Instruction::CosSymbol(a, dest) => cos_symbol(memory, a, dest),
+        Instruction::TanSymbol(a, dest) => tan_symbol(memory, a, dest),
+        Instruction::ArcsinSymbol(a, dest) => arcsin_symbol(memory, a, dest),
+        Instruction::ArccosSymbol(a, dest) => arccos_symbol(memory, a, dest),
+        Instruction::ArctanSymbol(a, dest) => arctan_symbol(memory, a, dest),
         Instruction::CompareEqual(a, b, dest) => compare_equal(memory, a, b, dest),
         Instruction::CompareGreater(a, b, dest) => compare_greater(memory, a, b, dest),
         Instruction::CompareLesser(a, b, dest) => compare_lesser(memory, a, b, dest),
@@ -110,6 +122,126 @@ fn subtract_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) 
     let a_data = memory.read_typed::<i64>(a)?;
     let b_data = memory.read_typed::<i64>(b)?;
     let result = a_data - b_data;
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+/// Multiply the integers in `a` and `b`, and put the result in `dest`.
+/// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
+fn multiply_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<i64>(a)?;
+    let b_data = memory.read_typed::<i64>(b)?;
+    let result = a_data * b_data;
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+/// Divide the integer in `a` by `b`, and put the result in `dest`.
+/// Returns an error if either `a` or `b` is undefined, does not contain an integer, or if `b` is zero.
+fn divide_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<i64>(a)?;
+    let b_data = memory.read_typed::<i64>(b)?;
+    if *b_data == 0 {
+        return Err("Division by zero error".to_string());
+    }
+    let result = a_data / b_data;
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+/// Modulo the integer in `a` by `b`, and put the result in `dest`.
+/// Returns an error if either `a` or `b` is undefined, does not contain an integer, or if `b` is zero.
+fn modulo_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<i64>(a)?;
+    let b_data = memory.read_typed::<i64>(b)?;
+    if *b_data == 0 {
+        return Err("Division by zero error".to_string());
+    }
+    let result = a_data % b_data;
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+/// Perform fused multiply-add on the integers in `a`, `b`, and `c` (a * b + c), and put the result in `dest`.
+/// Returns an error if any of `a`, `b`, or `c` is undefined, or does not contain an integer.
+fn fma_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, c: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<i64>(a)?;
+    let b_data = memory.read_typed::<i64>(b)?;
+    let c_data = memory.read_typed::<i64>(c)?;
+    let result = a_data * b_data + c_data;
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+/// Calculate the minimum of the integers in `a` and `b`, and put the result in `dest`.
+/// Returns an error if `a` or `b` is undefined, or does not contain an integer.
+fn min_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<i64>(a)?;
+    let b_data = memory.read_typed::<i64>(b)?;
+    let result = std::cmp::min(*a_data, *b_data);
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+/// Calculate the maximum of the integers in `a` and `b`, and put the result in `dest`.
+/// Returns an error if `a` or `b` is undefined, or does not contain an integer.
+fn max_symbols(memory: &mut Memory, a: &Symbol, b: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<i64>(a)?;
+    let b_data = memory.read_typed::<i64>(b)?;
+    let result = std::cmp::max(*a_data, *b_data);
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+/// Calculate the sine of the float in `a`, and put the result in `dest`.
+/// Returns an error if `a` is undefined, or does not contain a float.
+fn sin_symbol(memory: &mut Memory, a: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<f64>(a)?;
+    let result = a_data.sin();
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+/// Calculate the cosine of the float in `a`, and put the result in `dest`.
+/// Returns an error if `a` is undefined, or does not contain a float.
+fn cos_symbol(memory: &mut Memory, a: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<f64>(a)?;
+    let result = a_data.cos();
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+/// Calculate the tangent of the float in `a`, and put the result in `dest`.
+/// Returns an error if `a` is undefined, or does not contain a float.
+fn tan_symbol(memory: &mut Memory, a: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<f64>(a)?;
+    let result = a_data.tan();
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+/// Calculate the arcsine of the float in `a`, and put the result in `dest`.
+/// Returns an error if `a` is undefined, or does not contain a float.
+fn arcsin_symbol(memory: &mut Memory, a: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<f64>(a)?;
+    let result = a_data.asin();
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+/// Calculate the arccosine of the float in `a`, and put the result in `dest`.
+/// Returns an error if `a` is undefined, or does not contain a float.
+fn arccos_symbol(memory: &mut Memory, a: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<f64>(a)?;
+    let result = a_data.acos();
+    memory.write(dest, Data::new(&result));
+    Ok(())
+}
+
+/// Calculate the arctangent of the float in `a`, and put the result in `dest`.
+/// Returns an error if `a` is undefined, or does not contain a float.
+fn arctan_symbol(memory: &mut Memory, a: &Symbol, dest: &Symbol) -> Result<(), String> {
+    let a_data = memory.read_typed::<f64>(a)?;
+    let result = a_data.atan();
     memory.write(dest, Data::new(&result));
     Ok(())
 }
