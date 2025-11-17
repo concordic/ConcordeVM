@@ -10,15 +10,10 @@ use crate::log_and_return_err;
 
 use concordeisa::{memory::Symbol};
 
-use std::any::type_name;
 use std::collections::HashMap;
 use log::error;
 
 /// `Data` is a wrapper struct for the actual data stored in memory.
-///
-/// It wraps a `Box<dyn CloneableAny>`, which allows any cloneable type to be stored in it, on the
-/// heap. Data stored in memory must be cloneable, as we need to be able to clone it to get owned
-/// copies when performing certain operations.
 #[derive(Clone)]
 pub struct Data {
     value: Box<Vec<u8>>,
@@ -31,8 +26,8 @@ impl Data {
     /// 
     /// We always clone when creating new Data, since we want to have ownership over the contents,
     /// and because the lifetime of the passed value is not guaranteed to last as long as we want to.
-    pub fn new(value: &Vec<u8>, offset: usize, stride: usize) -> Data {
-        Data { value, offset, stride }
+    pub fn new(value: Vec<u8>, offset: usize, stride: usize) -> Data {
+        Data { value: Box::new(value), offset, stride }
     }
 }
 
@@ -63,26 +58,12 @@ impl Memory {
         self.0.insert(symbol.clone(), data);
     }
 
-    /// Read from the given symbol, returning an untyped `CloneableAny`.
+    /// Read from the given symbol
     ///
     /// If the symbol does not exist, return an error due to trying to read an undefined symbol. 
-    pub fn read_untyped(&self, symbol: &Symbol) -> Result<&dyn CloneableAny, String> {
+    pub fn read(&self, symbol: &Symbol) -> Result<&Data, String> {
         match self.0.get(symbol) {
-            Some(data) => Ok(data.as_ref()), 
-            None => log_and_return_err!("Tried to read from undefined symbol: {}", symbol.0)
-        }
-    }
-
-    /// Read from the given symbol, expecting a specific type. Guaranteed to return that type or error.
-    ///
-    /// If the symbol does not exist, return an error due to trying to read an undefined symbol. If the symbol does exist, but is
-    /// not of the expected type, return an error.
-    pub fn read_typed<T: CloneableAny + 'static>(&self, symbol: &Symbol) -> Result<&T, String> {
-        match self.0.get(symbol) {
-            Some(data) => {
-                let typed_data = data.as_type::<T>()?;
-                Ok(typed_data)
-            },
+            Some(data) => Ok(data), 
             None => log_and_return_err!("Tried to read from undefined symbol: {}", symbol.0)
         }
     }
