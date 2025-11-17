@@ -13,45 +13,26 @@ use concordeisa::{memory::Symbol};
 use std::any::type_name;
 use std::collections::HashMap;
 use log::error;
-use cloneable_any::CloneableAny;
-use dyn_clone::clone_box;
 
 /// `Data` is a wrapper struct for the actual data stored in memory.
 ///
 /// It wraps a `Box<dyn CloneableAny>`, which allows any cloneable type to be stored in it, on the
 /// heap. Data stored in memory must be cloneable, as we need to be able to clone it to get owned
 /// copies when performing certain operations.
-pub struct Data(Box<dyn CloneableAny>);
+#[derive(Clone)]
+pub struct Data {
+    value: Box<Vec<u8>>,
+    offset: usize,
+    stride: usize,
+}
 
 impl Data {
     /// Create a new `Data` struct containing a clone of the given value.
     /// 
     /// We always clone when creating new Data, since we want to have ownership over the contents,
     /// and because the lifetime of the passed value is not guaranteed to last as long as we want to.
-    pub fn new<T: Clone + 'static>(value: &T) -> Data {
-        Data(Box::new(value.clone()))
-    }
-
-    /// Downcast the data to a specific type. If the data is the wrong type, returns an error.
-    ///
-    /// The type must implement `Clone`, for reasons described above.
-    pub fn as_type<T: CloneableAny + 'static>(&self) -> Result<&T, String> {
-        match self.0.downcast_ref::<T>() {
-            Some(result) => Ok(result),
-            None => log_and_return_err!("Could not downcast data to {}!", type_name::<T>())
-        }
-    }
-}
-
-impl AsRef<dyn CloneableAny> for Data {
-    fn as_ref(&self) -> &dyn CloneableAny {
-        self.0.as_ref()
-    }
-}
-
-impl Clone for Data {
-    fn clone(&self) -> Data {
-        Data(clone_box(self.as_ref()))
+    pub fn new(value: &Vec<u8>, offset: usize, stride: usize) -> Data {
+        Data { value, offset, stride }
     }
 }
 
