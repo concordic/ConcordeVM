@@ -4,12 +4,11 @@ mod cpu;
 pub use cpu::{
     CPU,
     ExecutionPointer,
-    ExecutionStack,
+    CallTree,
 };
 
 mod memory;
 pub use memory::{
-    Data,
     Memory,
 };
 
