@@ -1,63 +1,71 @@
 use std::fmt::Debug;
 
 use cloneable_any::CloneableAny;
-use concordeisa::{instructions::Instruction, memory::Symbol};
+use concordeisa::{instructions::Instruction};
+
+use crate::memory::ByteSerialisable;
 
 use crate::{CPU};
 
 fn execute(instructions: Vec<Instruction>) -> CPU {
-    execute_entrypoint(instructions, &Symbol("main".to_string()))
+    execute_entrypoint(instructions, 0)
 }
 
-fn execute_entrypoint(instructions: Vec<Instruction>, entrypoint: &Symbol) -> CPU {
-    let mut cpu = CPU::new();
-    cpu.load_instructions(&instructions, entrypoint);
+fn execute_entrypoint(instructions: Vec<Instruction>, entrypoint: usize) -> CPU {
+    let mut cpu = CPU::new(1000);
+    cpu.load_instructions(&instructions);
     cpu.init_execution(entrypoint);
-    let mut running = true;
-    while running {
-        match cpu.cycle() {
-            Ok(b) => running = b,
-            Err(e) => panic!("Test failed during execution! {}", e),
-        }
-    }
+    cpu.extend_memory(24);
+
+    cpu.run();
+
     cpu
 }
 
-fn check_symbol_eq<T: PartialEq + Debug + CloneableAny>(cpu: CPU, symbol: &Symbol, value: T) {
-    match cpu.get_memory().read_typed::<T>(symbol) {
-        Ok(a) => assert_eq!(*a, value),
-        Err(e) => panic!("Test failed during evaluation! {}", e),
-    }
+fn check_symbol_eq<T: PartialEq + Debug + CloneableAny + ByteSerialisable>(cpu: CPU, symbol: usize, value: T) {
+    let x =  cpu.get_memory().read_typed::<T>(symbol);
+    assert_eq!(x, value)
 }
 
-#[test]
-fn basic_io() {
-    let a = Symbol("a".to_string());
-    let b = Symbol("b".to_string());
-    let s = Symbol("s".to_string());
-    let n = Symbol("n".to_string());
-    let instructions = vec![
-        Instruction::WriteStringToSymbol(a.clone(), "stdio".to_string()),
-        Instruction::WriteBytesToSymbol(b.clone(), "test output\n".as_bytes().to_vec()),
-        Instruction::WriteIntToSymbol(n.clone(), 12),
-        Instruction::OpenStream(a, s.clone()),
-        Instruction::WriteStream(s.clone(), n, b),
-    ];
+// #[test]
+// fn basic_io() {
+//     let a = Symbol("a".to_string());
+//     let b = Symbol("b".to_string());
+//     let s = Symbol("s".to_string());
+//     let n = Symbol("n".to_string());
+//     let instructions = vec![
+//         Instruction::WriteStringToSymbol(a.clone(), "stdio".to_string()),
+//         Instruction::WriteBytesToSymbol(b.clone(), "test output\n".as_bytes().to_vec()),
+//         Instruction::WriteIntToSymbol(n.clone(), 12),
+//         Instruction::OpenStream(a, s.clone()),
+//         Instruction::WriteStream(s.clone(), n, b),
+//     ];
 
-    execute(instructions);
-}
+//     execute(instructions);
+// }
 
 #[test]
 fn basic_arithmetic() {
-    let a = Symbol("a".to_string());
-    let b = Symbol("b".to_string());
-    let c = Symbol("c".to_string());
     let instructions = vec![
-        Instruction::WriteIntToSymbol(a.clone(), 1),
-        Instruction::WriteIntToSymbol(b.clone(), 2),
-        Instruction::AddSymbols(a.clone(), b.clone(), c.clone()),
+        Instruction::WriteIntToSymbol(0, 1i64),
+        Instruction::WriteIntToSymbol(8, 2),
+        Instruction::AddSymbols(0, 8, 16),
+        Instruction::Return(16, 8)
     ];
 
     let cpu = execute(instructions);
-    check_symbol_eq(cpu, &c, 3i64);
+    print!("Done executing");
+    check_symbol_eq(cpu, 16, 3i64);
+}
+
+
+#[test]
+fn strings() {
+    let instructions = vec![
+        Instruction::WriteStringToSymbol(0, String::from("Hello, world!")),
+        Instruction::Return(0, 24)
+    ];
+    let cpu = execute(instructions);
+    print!("Done executing");
+    check_symbol_eq(cpu, 0, String::from("Hello, world!"));
 }

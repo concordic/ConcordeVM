@@ -3,154 +3,106 @@
 //! Provides a CPU struct that executes instructions in memory, according to a stack of instruction
 //! pointers.
 //!
-//! Instructions are stored as `Vec<Instruction>`s under symbols in memory. 
+//! Instructions are stored as `Vec<Instruction>`s along with a PC
 
-use crate::{instructions::execute_instruction, io::ConcordeIO};
+use crate::{instructions::execute_instruction, instructions::Interrupt, io::ConcordeIO};
 use crate::memory::*;
 
-use concordeisa::{instructions::Instruction, memory::Symbol};
+use concordeisa::{instructions::Instruction};
 
 use log::info;
 use std::vec::Vec;
 
-/// `ExecutionPointer`s represent a location in memory where code is being executed.
-///
-/// Contains the symbol under which the instructions are stored, as well as the index of the
-/// instruction currently being executed.
-#[derive(Clone, Eq, PartialEq)]
-pub struct ExecutionPointer {
-    pub symbol: Symbol,
-    pub index: usize,
-}
-
-/// The `ExecutionStack` is the stack of the CPU. It stores `ExecutionPointer`s to every block of
-/// code being executed at any moment. 
 #[derive(Clone)]
-pub struct ExecutionStack(Vec<ExecutionPointer>);
+pub struct Program{
+    instructions: Vec<Instruction>,
+    pc: usize
+}
 
-impl Default for ExecutionStack {
+impl Default for Program {
     fn default() -> Self {
-        ExecutionStack::new()
+        Program::new()
     }
 }
 
-impl ExecutionStack {
+impl Program {
     /// Create a new empty `ExecutionStack`.
-    pub fn new() -> ExecutionStack {
-        ExecutionStack(Vec::new())
+    pub fn new() -> Program {
+        return Program { instructions: Vec::new(), pc: 0 };
     }
 
-    /// Delete everything in the stack.
-    pub fn clear(&mut self) {
-        self.0.clear();
-    }
-
-    /// Get the top pointer on the stack. Returns None if the stack is empty.
-    pub fn top(&self) -> Option<&ExecutionPointer>{
-        self.0.last()
+    pub fn get_instruction(&self) -> &Instruction{
+        return &self.instructions[self.pc];
     }
 
     /// Increment the index of the top pointer on the stack.
     pub fn increment(&mut self) {
-        self.0.last_mut().unwrap().index += 1;
+        self.pc += 1;
     }
 
     /// Jump execution to a given symbol. Will not error, even if the symbol is undefined.
-    pub fn jump(&mut self, target: &Symbol) {
-        info!("Jumped to {}!", target.0);
-        self.0.push(ExecutionPointer { symbol: target.clone(), index: 0 });
+    pub fn jump(&mut self, target: usize) {
+        info!("Jumped to {}!", target);
+        self.pc = target;
     }
 
-    /// Return execution to the previous location. Will not error.
-    pub fn ret(&mut self) {
-        info!("Returned!");
-        self.0.pop();
-    }
-
-    /// if goto is valid, sets symbol to new location and index to 0 to begin at top of instruction stack
-    pub fn goto(&mut self, target: &Symbol) {
-        if let Some(pointer) = self.0.last_mut() {
-            info!("Goto {}!", target.0);//goto symbol
-            pointer.symbol = target.clone();
-            pointer.index = 0;
-        }
-    }
-
-    pub fn dump(&self) -> Vec<ExecutionPointer> {
-        self.0.clone()
+    pub fn dump(&self) -> Vec<Instruction> {
+        return self.instructions.clone();
     }
 }
 
 /// The `CPU` is where instruction reading and execution is handled.
 ///
-/// Contains `Memory`, as well as an `ExecutionStack`. These are used to read and execute
+/// Contains `Memory`, as well as an `Program`. These are used to read and execute
 /// instructions.
 #[allow(clippy::upper_case_acronyms)]
 pub struct CPU {
     memory: Memory,
     io: ConcordeIO,
-    stack: ExecutionStack,
+    program: Program,
 }
 
 impl CPU {
     /// Create a new `CPU`. Initializes both the memory and stack to be empty.
-    pub fn new() -> CPU {
+    pub fn new(memory_size: usize) -> CPU {
         CPU {
-            memory: Memory::new(),
+            memory: Memory::new(memory_size),
             io: ConcordeIO::new(),
-            stack: ExecutionStack::new(),
+            program: Program::new(),
         }
     }
     
     /// Load instructions into memory at a given symbol.
-    pub fn load_instructions(&mut self, instructions: &Vec<Instruction>, symbol: &Symbol) {
-        self.memory.write(symbol, Data::new(instructions));
-        info!("Loaded {} instructions into symbol {}", instructions.len(), symbol.0);
+    pub fn load_instructions(&mut self, instructions: &Vec<Instruction>) {
+            self.program.instructions = instructions.clone();
+            self.program.pc = 0;
+        info!("Loaded {} instructions", instructions.len());
     }
 
     /// Get the CPU ready to start executing code. Clears the stack and jumps to the entrypoint.
-    pub fn init_execution(&mut self, entrypoint: &Symbol) {
-        self.stack.clear();
-        self.stack.jump(entrypoint);
+    pub fn init_execution(&mut self, entrypoint: usize) {
+        self.program.jump(entrypoint);
     }
 
-    /// Complete one CPU cycle. Returns false iff the stack is empty. Returns an error if something
-    /// goes wrong during execution. Returns true otherwise.
-    ///
-    /// Each CPU cycle does the following:
-    ///   - Checks if the stack is empty. If it is, return false. If not, continue.
-    ///   - Reads the instructions that the `ExecutionPointer` at the top of the stack points to.
-    ///   - If we're done execution there, return from that block, and return true. 
-    ///   - Otherwise, read the instruction at the given index and execute it.
-    ///   - If the instruction errors, return the error. Otherwise, return true.
-    ///
-    /// One CPU cycle does not necessarily map to one instruction, as a CPU cycle is used every time
-    /// we pop an execution pointer off of the stack when we are done executing those instructions. This is
-    /// technically equivalent to every instruction vector having a return instruction tacked on at
-    /// the end, but isn't handled the same way.
-    pub fn cycle(&mut self) -> Result<bool, String> {
-        if let Some(exec_pointer) = self.stack.top() {
-            info!("Currently executing code at symbol [{}], index {}", exec_pointer.symbol.0, exec_pointer.index);
-            let instruction_vec = self.memory.read_typed::<Vec<Instruction>>(&exec_pointer.symbol)?;
-            // This execution pointer has reached the end of it's code, so we can return
-            if instruction_vec.len() <= exec_pointer.index {
-                info!("Execution pointer at symbol {} has reached the end of it's code at index {}!", exec_pointer.symbol.0, exec_pointer.index);
-                self.stack.ret();
-                if self.stack.top().is_none() {
-                    info!("CPU stack is empty!");
-                    return Ok(false);
-                }
-                self.stack.increment();
-            } else {
-                let instruction = &instruction_vec[exec_pointer.index].clone();
-                execute_instruction(instruction, &mut self.memory, &mut self.io, &mut self.stack)?;
-            }
-            Ok(true)
+    // Runs until an interrupt is triggered
+    pub fn run(&mut self) -> Result<Interrupt, String> {
+        while self.program.pc < self.program.instructions.len() {
+            match self.cycle()? {
+                Interrupt::Ok => {},
+                Interrupt::EOF => {return Ok(Interrupt::EOF);},
+                interrupt @ _ => {return Ok(interrupt)}
+            };
+        };
+        return Ok(Interrupt::Ok);
+    }
+
+    // Run a single FDE cycle
+    pub fn cycle(&mut self) -> Result<Interrupt, String> {
+        if self.program.pc < self.program.instructions.len() {
+            return execute_instruction(&mut self.memory, &mut self.io, &mut self.program);
         }
-        else {
-            info!("CPU Stack is empty!");
-            Ok(false)
-        }
+        info!("Reached end of program!");
+        Ok(Interrupt::Ok)
     }
 
     /// Get a clone of the memory for debugging.
@@ -159,13 +111,17 @@ impl CPU {
     }
 
     /// Get a clone of the stack for debugging.
-    pub fn get_stack(&self) -> ExecutionStack {
-        self.stack.clone()
+    pub fn get_stack(&self) -> Program {
+        self.program.clone()
+    }
+
+    pub fn extend_memory(&mut self, n: usize){
+        self.memory.extend_memory(n);
     }
 }
 
 impl Default for CPU {
    fn default() -> Self {
-       CPU::new()
+       CPU::new(0)
    } 
 }
