@@ -13,6 +13,9 @@ pub use memory::{
 
 mod io;
 mod instructions;
+pub use instructions::{
+    Interrupt
+};
 
 #[macro_use]
 mod errors;
