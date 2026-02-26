@@ -17,6 +17,11 @@ pub use instructions::{
     Interrupt
 };
 
+mod scheduler;
+pub use scheduler::{
+    Scheduler
+};
+
 #[macro_use]
 mod errors;
 

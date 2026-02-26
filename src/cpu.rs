@@ -6,29 +6,34 @@
 //! Instructions are stored as `Vec<Instruction>`s along with a PC
 
 use crate::{instructions::execute_instruction, instructions::Interrupt, io::ConcordeIO};
+use std::rc::Rc;
 use crate::memory::*;
 
-use concordeisa::{instructions::Instruction};
+use concordeisa::instructions::{self, Instruction};
 
 use log::info;
 use std::vec::Vec;
 
 #[derive(Clone)]
 pub struct Program{
-    instructions: Vec<Instruction>,
-    pc: usize
+    pub instructions: Rc<Vec<Instruction>>,
+    pub pc: usize
 }
 
 impl Default for Program {
     fn default() -> Self {
-        Program::new()
+        Program::new(Vec::new())
     }
 }
 
 impl Program {
     /// Create a new empty `ExecutionStack`.
-    pub fn new() -> Program {
-        return Program { instructions: Vec::new(), pc: 0 };
+    pub fn new(instructions: Vec<Instruction>) -> Program {
+        return Program { instructions: Rc::new(instructions), pc: 0 };
+    }
+
+    pub fn fork_to_pc(&self, pc: usize) -> Program {
+        return Program { instructions: Rc::clone(&self.instructions), pc: pc }
     }
 
     pub fn get_instruction(&self) -> &Instruction{
@@ -47,7 +52,7 @@ impl Program {
     }
 
     pub fn dump(&self) -> Vec<Instruction> {
-        return self.instructions.clone();
+        return self.instructions.to_vec();
     }
 }
 
@@ -57,9 +62,9 @@ impl Program {
 /// instructions.
 #[allow(clippy::upper_case_acronyms)]
 pub struct CPU {
-    memory: Memory,
+    pub memory: Memory,
     io: ConcordeIO,
-    program: Program,
+    pub program: Program,
 }
 
 impl CPU {
@@ -68,20 +73,28 @@ impl CPU {
         CPU {
             memory: Memory::new(memory_size),
             io: ConcordeIO::new(),
-            program: Program::new(),
+            program: Program::default(),
         }
     }
-    
-    /// Load instructions into memory at a given symbol.
-    pub fn load_instructions(&mut self, instructions: &Vec<Instruction>) {
-            self.program.instructions = instructions.clone();
-            self.program.pc = 0;
-        info!("Loaded {} instructions", instructions.len());
+
+    pub fn fork_to_pc(self, pc: usize) -> CPU {
+        return CPU::with_program(0, self.program.fork_to_pc(pc));
     }
 
-    /// Get the CPU ready to start executing code. Clears the stack and jumps to the entrypoint.
-    pub fn init_execution(&mut self, entrypoint: usize) {
-        self.program.jump(entrypoint);
+    pub fn with_program(memory_size: usize, program: Program) -> CPU {
+        CPU {
+            memory: Memory::new(memory_size),
+            io: ConcordeIO::new(),
+            program: program
+        }
+    }
+
+    pub fn get_memory_mut(&mut self) -> &mut Memory {
+        return &mut self.memory;
+    }
+
+    pub fn load_program(&mut self, program: Program) {
+        self.program = program;
     }
 
     // Runs until an interrupt is triggered
@@ -123,5 +136,5 @@ impl CPU {
 impl Default for CPU {
    fn default() -> Self {
        CPU::new(0)
-   } 
+   }
 }

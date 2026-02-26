@@ -2,6 +2,8 @@
 //!
 //! Provides a function to execute arbitrary instructions as defined by the ConcordeISA.
 
+use std::future;
+
 use crate::cpu::Program;
 use crate::io::ConcordeIO;
 use crate::memory::{Memory};
@@ -69,11 +71,11 @@ pub fn execute_instruction(
         
         // Flow control
         Instruction::Jump(target) => jump(program, target),
-        Instruction::JumpIfTrue(target, condition) => {
-            jump_if_true(memory, program, target, condition)
-        }
+        Instruction::JumpIfTrue(target, condition) => jump_if_true(memory, program, target, condition),
+        Instruction::Await(fut_id, return_write_addr) => Ok(Interrupt::Await(fut_id, return_write_addr)),
+        Instruction::CreateCoroutine(dest, arg_addr, n_arg_bytes, write_coro_id_addr) => Ok(Interrupt::CreateCoroutine(dest, arg_addr, n_arg_bytes, write_coro_id_addr)),
         Instruction::Return(address, n) => ret(address, n),
-
+        Instruction::DeleteFuture(future_id) => delete_future(future_id),
         // Misc.
         Instruction::NoOp() => Ok(Interrupt::Ok),
 
@@ -93,12 +95,22 @@ pub fn execute_instruction(
 
 
 pub enum Interrupt {
-    Await(usize),
+    //    fut id, return write addr
+    Await(usize, usize),
+    // dest, arg addr, n arg bytes, write coro id addr
+    CreateCoroutine(usize, usize, usize, usize),
+    //           future id
+    DeleteFuture(usize),
+    //  ret addr, n_ret_bytes
     Ret(usize, usize),
     Ok,
     EOF
 }
 
+
+fn delete_future(future_id: usize) -> Result<Interrupt, String> {
+    return Ok(Interrupt::DeleteFuture(future_id));
+}
 
 /// Write a `String` literal to a symbol.
 fn write_string_to_symbol(

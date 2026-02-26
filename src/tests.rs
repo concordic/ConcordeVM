@@ -1,28 +1,28 @@
 use std::fmt::Debug;
+use std::rc::Rc;
 
 use cloneable_any::CloneableAny;
 use concordeisa::{instructions::Instruction};
 
-use crate::memory::ByteSerialisable;
+use crate::memory::{ByteParseable, ByteSerialisable};
 
-use crate::{CPU};
+use crate::{CPU, Program, Scheduler};
 
 fn execute(instructions: Vec<Instruction>) -> CPU {
     execute_entrypoint(instructions, 0)
 }
 
 fn execute_entrypoint(instructions: Vec<Instruction>, entrypoint: usize) -> CPU {
-    let mut cpu = CPU::new(1000);
-    cpu.load_instructions(&instructions);
-    cpu.init_execution(entrypoint);
-    cpu.extend_memory(24);
+    let instructions: std::rc::Rc<Vec<Instruction>> = Rc::new(instructions);
+    let program: Program = Program { instructions: instructions, pc: entrypoint };
 
-    cpu.run();
+    let scheduler = Scheduler::new();
+    scheduler.run(program);
 
-    cpu
+    return scheduler;
 }
 
-fn check_symbol_eq<T: PartialEq + Debug + CloneableAny + ByteSerialisable>(cpu: CPU, symbol: usize, value: T) {
+fn check_symbol_eq<T: PartialEq + Debug + CloneableAny + ByteSerialisable + ByteParseable>(cpu: CPU, symbol: usize, value: T) {
     let x =  cpu.get_memory().read_typed::<T>(symbol);
     assert_eq!(x, value)
 }
