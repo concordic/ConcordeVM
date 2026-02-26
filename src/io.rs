@@ -7,7 +7,6 @@ use crate::log_and_return_err;
 use std::fs::{rename, File};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::collections::HashMap;
-use concordeisa::memory::Symbol;
 use log::error;
 use io_streams::*;
 
@@ -96,7 +95,7 @@ impl ConcordeStream {
 }
 
 /// Concorde's IO interface. This is what the CPU uses to make IO calls.
-pub struct ConcordeIO(HashMap<Symbol, ConcordeStream>);
+pub struct ConcordeIO(HashMap<usize, ConcordeStream>);
 
 impl ConcordeIO {
     // Make a new empty IO interface.
@@ -105,7 +104,7 @@ impl ConcordeIO {
     }
 
     /// Open `filename` under the symbol `name`.
-    pub fn open(&mut self, name: &Symbol, filename: String) -> Result<(), String> {
+    pub fn open(&mut self, name: &usize, filename: String) -> Result<(), String> {
         let stream = ConcordeStream::open(&filename);
         if stream.is_err() {
             log_and_return_err!("{}", stream.err().unwrap());
@@ -116,27 +115,27 @@ impl ConcordeIO {
 
     /// Read `n` bytes from the stream at the given symbol.
     /// Returns the read data and the number of bytes read.
-    pub fn read(&mut self, name: &Symbol, n: usize) -> Result<(Vec<u8>, usize), String> {
+    pub fn read(&mut self, name: &usize, n: usize) -> Result<(Vec<u8>, usize), String> {
         match self.0.get_mut(name) {
             Some(stream) => stream.read(n),
-            None => log_and_return_err!("Tried to read from undefined stream {}", name.0),
+            None => log_and_return_err!("Tried to read from undefined stream {}", name),
         }
     }
 
     /// Write the contents of `buf` to the stream at the given symbol.
     /// Returns the number of bytes written.
-    pub fn write(&mut self, name: &Symbol, buf: &[u8]) -> Result<usize, String> {
+    pub fn write(&mut self, name: &usize, buf: &[u8]) -> Result<usize, String> {
         match self.0.get_mut(name) {
             Some(stream) => stream.write(buf),
-            None => log_and_return_err!("Tried to write to undefined stream {}", name.0),
+            None => log_and_return_err!("Tried to write to undefined stream {}", name),
         }
     }
 
     /// Close the given stream.
-    pub fn close(&mut self, name: &Symbol) -> Result<(), String> {
+    pub fn close(&mut self, name: &usize) -> Result<(), String> {
         match self.0.remove(name) {
             Some(stream) => stream.close(),
-            None => log_and_return_err!("Tried to close undefined stream {}", name.0),
+            None => log_and_return_err!("Tried to close undefined stream {}", name),
         }
     }
 }

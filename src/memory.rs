@@ -1,57 +1,127 @@
 //! ConcordeVM's Memory system.
 //! 
-//! Provides a symbol table that acts as ConcordeVM's "RAM"
-//! 
-//! We chose to use a symbol table because it's an inherently safer form of memory, especially
-//! once we implement proper scoping for it, since you cannot access memory without having access
-//! to the symbol you need.
+//! Provides linear memory for the VM to use along with utils for reading and writing typed data.
 
 use crate::log_and_return_err;
 
-use concordeisa::{memory::Symbol};
-
-use std::any::type_name;
-use std::collections::HashMap;
 use log::error;
-use cloneable_any::CloneableAny;
-use dyn_clone::clone_box;
+use std::{cmp, mem};
 
-/// `Data` is a wrapper struct for the actual data stored in memory.
-///
-/// It wraps a `Box<dyn CloneableAny>`, which allows any cloneable type to be stored in it, on the
-/// heap. Data stored in memory must be cloneable, as we need to be able to clone it to get owned
-/// copies when performing certain operations.
-pub struct Data(Box<dyn CloneableAny>);
+pub trait ByteSerialisable {
+    fn to_bytes(&self) -> Vec<u8>;
+    fn from_bytes(bytes: & [u8]) -> Self;
+    fn write_bytes_to(&self, vec: &mut Vec<u8>, address: usize);
+    fn append_bytes_to(&self, vec: &mut Vec<u8>);
+    fn get_size(&self) -> usize;
+}
 
-impl Data {
-    /// Create a new `Data` struct containing a clone of the given value.
-    /// 
-    /// We always clone when creating new Data, since we want to have ownership over the contents,
-    /// and because the lifetime of the passed value is not guaranteed to last as long as we want to.
-    pub fn new<T: Clone + 'static>(value: &T) -> Data {
-        Data(Box::new(value.clone()))
+macro_rules! impl_for_numerics {
+    ($($t:ty),*) => {
+        $(
+            impl ByteSerialisable for $t {
+                fn to_bytes(&self) -> Vec<u8> {
+                    return Vec::from(self.to_ne_bytes());
+                }
+
+                fn from_bytes(bytes: & [u8]) -> Self {
+                    let buf: [u8; mem::size_of::<Self>()] = bytes.try_into().expect("wrong buffer size for from_bytes");
+                    return Self::from_ne_bytes(buf);
+                }
+
+                fn write_bytes_to(&self, vec: &mut Vec<u8>, address: usize){
+                    for (offset, byte) in self.to_ne_bytes().iter().enumerate() {
+                        vec[address + offset] = *byte;
+                    }
+                }
+
+                fn append_bytes_to(&self, vec: &mut Vec<u8>) {
+                    vec.extend(self.to_ne_bytes())
+                }
+
+                fn get_size(&self) -> usize {
+                    return mem::size_of::<Self>();
+                }
+            }
+        )*
+    };
+}
+
+impl_for_numerics!(u8, u16, u32, u64, i8, i16, i32, i64, i128, u128, f32, f64);
+
+impl ByteSerialisable for String {
+    fn to_bytes(&self) -> Vec<u8> {
+
+        return self.chars().map(|c| c as u8).collect();
     }
 
-    /// Downcast the data to a specific type. If the data is the wrong type, returns an error.
-    ///
-    /// The type must implement `Clone`, for reasons described above.
-    pub fn as_type<T: CloneableAny + 'static>(&self) -> Result<&T, String> {
-        match self.0.downcast_ref::<T>() {
-            Some(result) => Ok(result),
-            None => log_and_return_err!("Could not downcast data to {}!", type_name::<T>())
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        String::from_utf8(bytes[..end].to_vec()).expect("invalid UTF-8")
+    }
+    
+
+    fn write_bytes_to(&self, vec: &mut Vec<u8>, address: usize) {
+        for (offset, c) in self.chars().enumerate(){
+            vec[address + offset] = c as u8;
         }
     }
-}
 
-impl AsRef<dyn CloneableAny> for Data {
-    fn as_ref(&self) -> &dyn CloneableAny {
-        self.0.as_ref()
+    fn append_bytes_to(&self, vec: &mut Vec<u8>) {
+        vec.extend(self.to_bytes());
+    }
+
+    fn get_size(&self) -> usize {
+        return self.len();
     }
 }
 
-impl Clone for Data {
-    fn clone(&self) -> Data {
-        Data(clone_box(self.as_ref()))
+impl ByteSerialisable for bool {
+    fn to_bytes(&self) -> Vec<u8> {
+        if *self {
+            return [1u8].to_vec();
+        } else {
+            return [0u8].to_vec();
+        }
+    }
+
+    fn from_bytes(bytes: & [u8]) -> Self {
+        return bytes[0] == 1u8;
+    }
+
+    fn write_bytes_to(&self, vec: &mut Vec<u8>, address: usize) {
+        vec[address] = if *self {1u8} else {0u8};
+    }
+
+    fn append_bytes_to(&self, vec: &mut Vec<u8>) {
+        vec.extend(self.to_bytes());
+    }
+
+    fn get_size(&self) -> usize {
+        return 1;
+    }
+}
+
+impl ByteSerialisable for Vec<u8> {
+    fn to_bytes(&self) -> Vec<u8> {
+        return self.clone();
+    }
+
+    fn from_bytes(bytes: & [u8]) -> Self {
+        return bytes.to_vec();
+    }
+
+    fn write_bytes_to(&self, vec: &mut Vec<u8>, address: usize) {
+        for (offset, value) in self.iter().enumerate() {
+            vec[address + offset] = self[address + offset];
+        }
+    }
+
+    fn append_bytes_to(&self, vec: &mut Vec<u8>) {
+        vec.extend(self);
+    }
+
+    fn get_size(&self) -> usize {
+        return self.len();
     }
 }
 
@@ -60,50 +130,38 @@ impl Clone for Data {
 /// It wraps a `HashMap<Symbol, Data>` and implements basic memory operations over that, including
 /// both typed and untyped reading, writing, and copying.
 #[derive(Clone)]
-pub struct Memory(HashMap<Symbol, Data>);
+pub struct Memory{
+    linear_memory: Vec<u8>,
+    write_pointer: usize,
+}
 
 impl Memory {
     /// Create a new block of memory
-    pub fn new() -> Memory {
-        Memory(HashMap::new())
+    pub fn new(size: usize) -> Memory {
+        return Memory{linear_memory: vec![0; size], write_pointer: 0};
     }
 
     /// Create a new block of memory with a given capacity
     #[allow(dead_code)]
-    pub fn with_capacity(size: usize) -> Memory {
-        Memory(HashMap::with_capacity(size))
+    pub fn with_capacity(capacity: usize) -> Memory {
+        return Memory{linear_memory: Vec::with_capacity(capacity), write_pointer: 0};
     }
 
     /// Write the given data to the symbol. If the symbol does not already exist, create it.
     ///
     /// Returns nothing and should never be able to fail, since any Symbol can we written to, even
     /// if it is undefined.
-    pub fn write(&mut self, symbol: &Symbol, data: Data) {
-        self.0.insert(symbol.clone(), data);
-    }
-
-    /// Read from the given symbol, returning an untyped `CloneableAny`.
-    ///
-    /// If the symbol does not exist, return an error due to trying to read an undefined symbol. 
-    pub fn read_untyped(&self, symbol: &Symbol) -> Result<&dyn CloneableAny, String> {
-        match self.0.get(symbol) {
-            Some(data) => Ok(data.as_ref()), 
-            None => log_and_return_err!("Tried to read from undefined symbol: {}", symbol.0)
-        }
+    pub fn write(&mut self, address: usize, data: & impl ByteSerialisable) {
+        data.write_bytes_to(&mut self.linear_memory, address);
     }
 
     /// Read from the given symbol, expecting a specific type. Guaranteed to return that type or error.
     ///
     /// If the symbol does not exist, return an error due to trying to read an undefined symbol. If the symbol does exist, but is
     /// not of the expected type, return an error.
-    pub fn read_typed<T: CloneableAny + 'static>(&self, symbol: &Symbol) -> Result<&T, String> {
-        match self.0.get(symbol) {
-            Some(data) => {
-                let typed_data = data.as_type::<T>()?;
-                Ok(typed_data)
-            },
-            None => log_and_return_err!("Tried to read from undefined symbol: {}", symbol.0)
-        }
+    pub fn read_typed<T: ByteSerialisable + 'static>(&self, address: usize) -> T {
+        let slice = &self.linear_memory[address..address + mem::size_of::<T>()];
+        return T::from_bytes(slice);
     }
 
     /// Copy the data from source to dest. If dest doesn't exist yet, create it.
@@ -112,24 +170,30 @@ impl Memory {
     ///
     /// While this could arguably be implented at the instruction level, having this be a memory
     /// level operation may be good for operations besides just copying.
-    pub fn copy(&mut self, source: &Symbol, dest: &Symbol) -> Result<(), String> {
-        match self.0.get(source) {
-            Some(data) => {
-                self.0.insert(dest.clone(), data.clone());
-                Ok(())
-            }
-            None => log_and_return_err!("Couldn't copy undefined symbol {} to {}!", source.0, dest.0)
+    pub fn memcpy(&mut self, source: usize, dest: usize, n: usize) -> Result<(), String> {
+
+        if cmp::max(source, dest) + n <= self.linear_memory.capacity() {
+            for offset in 0..n {
+                self.linear_memory[dest + offset] = self.linear_memory[source + offset];
+            };
+            return Ok(());
+        } else {
+            log_and_return_err!("Tried memcpy of {} bytes from {} to {}, but max memory address is {}", n, source, dest, self.linear_memory.capacity());
         }
     }
 
     /// Get an iterator over all of the symbols currently in memory. Useful for debugging purposes.
-    pub fn dump(&self) -> HashMap<Symbol, Data> {
-        self.0.clone()
+    pub fn dump(&self) -> Vec<u8> {
+        return self.linear_memory.clone();
+    }
+
+    pub fn extend_memory(&mut self, n: usize) {
+        self.linear_memory.extend(vec![0u8; n]);
     }
 }
 
 impl Default for Memory {
    fn default() -> Self {
-       Memory::new()
+       Memory::new(0)
    } 
 }

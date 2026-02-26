@@ -3,13 +3,11 @@
 mod cpu;
 pub use cpu::{
     CPU,
-    ExecutionPointer,
-    ExecutionStack,
+    Program,
 };
 
 mod memory;
 pub use memory::{
-    Data,
     Memory,
 };
 
