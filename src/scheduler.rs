@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet, VecDeque}, future};
+use std::{collections::{HashMap, HashSet, VecDeque}, future, hash::Hash};
 use crate::{CPU, Interrupt, memory::ByteSerialisable};
 use log::info;
 
@@ -73,6 +73,7 @@ pub struct Scheduler {
     futures: HashMap<Id, Future>,
     ready_queue: VecDeque<Id>,
     _new_spawned_coro_id: Id,
+    _new_spawned_future_id: Id
 }
 
 impl Scheduler {
@@ -82,18 +83,27 @@ impl Scheduler {
             futures: HashMap::new(),
             ready_queue: VecDeque::new(),
             _new_spawned_coro_id: 0,     // Id that will be assigned to any coro that spawns, NOT the id of the coro currently being run
+            _new_spawned_future_id: 0,
         }
     }
 
-    fn get_new_id(&mut self) -> Id {
+    fn get_new_fut_id(&mut self) -> Id {
+        self._new_spawned_future_id += 1;
+        return self._new_spawned_future_id
+    }
+
+    fn get_new_coro_id(&mut self) -> Id {
         self._new_spawned_coro_id += 1;
         return self._new_spawned_coro_id;
     }
 
     pub fn spawn(&mut self, program: Program, priority: i32, args: & dyn ByteSerialisable) -> Result<Id, String> {
-        let id = self.get_new_id();
+        let id = self.get_new_coro_id();
+        
+        let fut_id = self.spawn_fut(Some(id));
 
         let mut coroutine = Coroutine::new(id, priority, program);
+        coroutine.dependant = Some(fut_id);
         
         {
             let memory = coroutine.cpu.get_memory_mut();
@@ -104,8 +114,8 @@ impl Scheduler {
         self.coroutines.insert(id, coroutine);
         self.ready_queue.push_back(id);
         
-        info!("Spawned new coroutine with id {}", id);
-        return Ok(id);
+        info!("Spawned new coroutine with id {}, with future {}", id, fut_id);
+        return Ok(fut_id);
     }
 
     pub fn await_future(&mut self, coroutine_id: Id, future_id: Id, write_location: usize) -> Result<(), String> {
@@ -225,6 +235,24 @@ impl Scheduler {
         }
     }
 
+    fn spawn_fut(&mut self, dep: Option<Id>) -> Id {
+        let fut_id = self.get_new_fut_id();
+
+        let mut dependants = HashSet::<Id>::new();
+        
+        if let Some(dep_id) = dep {
+            dependants.insert(dep_id);
+        }
+
+        let fut = Future {
+            id: fut_id,
+            state: FutureState::Waiting,
+            dependants
+        };
+        self.futures.insert(fut_id, fut);
+        return fut_id
+    }
+
     pub fn _run(&mut self) -> Result<(), String>{
         
         if let Some(mut curr_coro_id) = self.get_next_runnable() {
@@ -243,17 +271,16 @@ impl Scheduler {
                         self.await_future(curr_coro_id,fut_id, return_write_addr)?;
                         if let Some(fut) = self.futures.get_mut(&fut_id) {
                             if fut.state == FutureState::Complete {
-                                self.complete_future(future_id, value)
+                                self.complete_future(future_id, value);
                             }
                         }
                         
-
                         if let Some(next_coro_id) = self.get_next_runnable(){
                             self.get_curr_coro_mut(curr_coro_id).cpu.program.pc += 1;
                             curr_coro_id = next_coro_id;
                         }
                     },
-                    Interrupt::CreateCoroutine(dest, arg_addr, n_arg_bytes, write_coro_id_addr) => {
+                    Interrupt::CreateCoroutine(dest, arg_addr, n_arg_bytes, write_coro_fut_id_addr) => {
 
                         let (program, args) = {
                             let curr_coro = self.get_curr_coro_mut(curr_coro_id);
@@ -262,10 +289,10 @@ impl Scheduler {
                             (program, args)
                         };
 
-                        let coro_id = self.spawn(program, 0, &args)?;
-
+                        let coro_fut_id = self.spawn(program, 0, &args)?;
+                        
                         let curr_coro = self.get_curr_coro_mut(curr_coro_id);
-                        curr_coro.cpu.get_memory_mut().write(write_coro_id_addr, &coro_id);
+                        curr_coro.cpu.get_memory_mut().write(write_coro_fut_id_addr, &coro_fut_id);
                         curr_coro.cpu.program.pc += 1;
                     }    
                     Interrupt::Ret(ret_val_addr, n_ret_bytes) => {
