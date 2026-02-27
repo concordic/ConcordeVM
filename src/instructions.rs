@@ -41,6 +41,8 @@ pub fn execute_instruction(
         
         // Memory management
         Instruction::MemCpy(source, dest, n) => copy_symbol(memory, source, dest, n),
+        Instruction::MemExtend(n_bytes) => extend_memory(memory, n_bytes),
+        Instruction::MemExtendTo(n_bytes)=> extend_memory_to(memory, n_bytes),
 
         // Arithmetic
         Instruction::AddSymbols(a, b, dest) => add_symbols(memory, a, b, dest),
@@ -107,6 +109,15 @@ pub enum Interrupt {
     EOF
 }
 
+fn extend_memory(memory: &mut Memory, n_bytes: usize) -> Result<Interrupt, String> {
+    memory.extend_memory(n_bytes);
+    return Ok(Interrupt::Ok)
+}
+
+fn extend_memory_to(memory: &mut Memory, n_bytes: usize) -> Result<Interrupt, String> {
+    memory.extend_memory_to(n_bytes);
+    return Ok(Interrupt::Ok)
+}
 
 fn delete_future(future_id: usize) -> Result<Interrupt, String> {
     return Ok(Interrupt::DeleteFuture(future_id));
@@ -381,11 +392,6 @@ fn jump_if_true(
 /// Return execution to the last symbol. Will not error.
 fn ret(address: usize, n: usize) -> Result<Interrupt, String> {
     return Ok(Interrupt::Ret(address, n));
-}
-
-fn extend_memory(memory: &mut Memory, n: usize) -> Result<Interrupt, String> {
-    memory.extend_memory(n);
-    return Ok(Interrupt::Ok);
 }
 
 /// Open a stream in the IO interface.

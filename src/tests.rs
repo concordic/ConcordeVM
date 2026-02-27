@@ -6,24 +6,24 @@ use concordeisa::{instructions::Instruction};
 
 use crate::memory::{ByteParseable, ByteSerialisable};
 
-use crate::{CPU, Program, Scheduler};
+use crate::{CPU, Memory, Program, Scheduler};
 
-fn execute(instructions: Vec<Instruction>) -> CPU {
+fn execute(instructions: Vec<Instruction>) -> Result<Memory, String> {
     execute_entrypoint(instructions, 0)
 }
 
-fn execute_entrypoint(instructions: Vec<Instruction>, entrypoint: usize) -> CPU {
+fn execute_entrypoint(instructions: Vec<Instruction>, entrypoint: usize) -> Result<Memory, String> {
     let instructions: std::rc::Rc<Vec<Instruction>> = Rc::new(instructions);
     let program: Program = Program { instructions: instructions, pc: entrypoint };
 
-    let scheduler = Scheduler::new();
-    scheduler.run(program);
+    let mut scheduler = Scheduler::new();
+    scheduler.run(program)?;
 
-    return scheduler;
+    return Ok(scheduler.get_coro(1).memory_dump());
 }
 
-fn check_symbol_eq<T: PartialEq + Debug + CloneableAny + ByteSerialisable + ByteParseable>(cpu: CPU, symbol: usize, value: T) {
-    let x =  cpu.get_memory().read_typed::<T>(symbol);
+fn check_symbol_eq<T: PartialEq + Debug + CloneableAny + ByteSerialisable + ByteParseable>(memory:Memory, symbol: usize, value: T) {
+    let x =  memory.read_typed::<T>(symbol);
     assert_eq!(x, value)
 }
 
@@ -45,27 +45,31 @@ fn check_symbol_eq<T: PartialEq + Debug + CloneableAny + ByteSerialisable + Byte
 // }
 
 #[test]
-fn basic_arithmetic() {
+fn basic_arithmetic() -> Result<(), Box<dyn std::error::Error>> {
     let instructions = vec![
+        Instruction::MemExtend(1000),
         Instruction::WriteIntToSymbol(0, 1i64),
         Instruction::WriteIntToSymbol(8, 2),
         Instruction::AddSymbols(0, 8, 16),
         Instruction::Return(16, 8)
     ];
 
-    let cpu = execute(instructions);
+    let memory = execute(instructions)?;
     print!("Done executing");
-    check_symbol_eq(cpu, 16, 3i64);
+    check_symbol_eq(memory, 16, 3i64);
+    Ok(())
 }
 
 
 #[test]
-fn strings() {
+fn strings() -> Result<(), Box<dyn std::error::Error>> {
     let instructions = vec![
+        Instruction::MemExtend(1000),
         Instruction::WriteStringToSymbol(0, String::from("Hello, world!")),
         Instruction::Return(0, 24)
     ];
-    let cpu = execute(instructions);
+    let memory = execute(instructions)?;
     print!("Done executing");
-    check_symbol_eq(cpu, 0, String::from("Hello, world!"));
+    check_symbol_eq(memory, 0, String::from("Hello, world!"));
+    Ok(())
 }
