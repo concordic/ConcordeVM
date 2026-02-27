@@ -44,6 +44,21 @@ fn check_symbol_eq<T: PartialEq + Debug + CloneableAny + ByteSerialisable + Byte
 //     execute(instructions);
 // }
 
+
+
+/*
+Foo:
+    MemExtend 1000
+    0 <- 1
+    8 <- 2
+    [16] = [0] + [8]
+    ret 8 bytes at [16]
+
+Main:
+    MemExtend 1000
+    
+*/
+
 #[test]
 fn basic_arithmetic() -> Result<(), Box<dyn std::error::Error>> {
     let instructions = vec![
@@ -73,3 +88,31 @@ fn strings() -> Result<(), Box<dyn std::error::Error>> {
     check_symbol_eq(memory, 0, String::from("Hello, world!"));
     Ok(())
 }
+
+
+#[test]
+fn function_calls() -> Result<(), Box<dyn std::error::Error>> {
+    let instructions = vec![
+        Instruction::MemExtend(100),
+        Instruction::CreateCoroutine(9, 0, 0, 0),
+        Instruction::Await(0, 0),
+        Instruction::Return(0, 8),
+
+        Instruction::MemExtend(1000),
+        Instruction::WriteIntToSymbol(0, 1i64),
+        Instruction::WriteIntToSymbol(8, 2i64),
+        Instruction::AddSymbols(0, 8, 16),
+        Instruction::Return(16, 8),
+
+        Instruction::MemExtend(1000),
+        Instruction::CreateCoroutine(4, 0, 0, 0),
+        Instruction::Await(0, 0),
+        Instruction::Return(0, 8)
+    ];
+
+    let memory = execute(instructions)?;
+    print!("Done executing");
+    check_symbol_eq(memory, 0, 3i64);
+    Ok(())
+}
+
