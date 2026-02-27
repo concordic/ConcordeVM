@@ -109,7 +109,7 @@ impl Scheduler {
     pub fn spawn_coro(&mut self, program: Program, priority: i32, args: & dyn ByteSerialisable) -> Result<Id, String> {
         let id = self.get_new_coro_id();
         
-        let fut_id = self.spawn_fut(Some(id));
+        let fut_id = self.spawn_fut();
 
         let mut coroutine = Coroutine::new(id, priority, program);
         coroutine.dependant = Some(fut_id);
@@ -263,19 +263,13 @@ impl Scheduler {
         }
     }
 
-    fn spawn_fut(&mut self, dep: Option<Id>) -> Id {
+    fn spawn_fut(&mut self) -> Id {
         let fut_id = self.get_new_fut_id();
-
-        let mut dependants = HashSet::<Id>::new();
-        
-        if let Some(dep_id) = dep {
-            dependants.insert(dep_id);
-        }
 
         let fut = Future {
             id: fut_id,
             state: FutureState::Waiting,
-            dependants,
+            dependants: HashSet::<Id>::new(),
             value: None
         };
         self.futures.insert(fut_id, fut);
