@@ -74,7 +74,7 @@ pub fn execute_instruction(
         // Flow control
         Instruction::Jump(target) => jump(program, target),
         Instruction::JumpIfTrue(target, condition) => jump_if_true(memory, program, target, condition),
-        Instruction::Await(fut_id, return_write_addr) => Ok(Interrupt::Await(fut_id, return_write_addr)),
+        Instruction::Await(fut_id_location, return_write_addr) => Ok(Interrupt::Await(memory.read_typed::<usize>(fut_id_location), return_write_addr)),
         Instruction::CreateCoroutine(dest, arg_addr, n_arg_bytes, write_coro_id_addr) => Ok(Interrupt::CreateCoroutine(dest, arg_addr, n_arg_bytes, write_coro_id_addr)),
         Instruction::Return(address, n) => ret(address, n),
         Instruction::DeleteFuture(future_id) => delete_future(future_id),
