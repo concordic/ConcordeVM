@@ -1,8 +1,10 @@
+
 use core::panic;
 use std::{collections::{HashMap, HashSet, VecDeque}, future, hash::Hash};
 use crate::{CPU, Interrupt, Memory, memory::ByteSerialisable};
 use log::info;
 
+use crate::domain::Domain;
 use crate::cpu::Program;
 
 
@@ -152,11 +154,10 @@ impl Scheduler {
             .ok_or_else(|| format!("Future at symbol {} not found", future_id))?;
 
 
-        if future.state == FutureState::Waiting{
-            future.value = Some(value.clone()?.to_bytes());
-        } else {
+        if future.state != FutureState::Waiting{
             panic!("Tried to set value for future {} which has state {}", future_id, "future.state"); // TODO: impl display for fut state
         }
+
         future.value = Some(value.clone()?.to_bytes());
 
         let val = *value.as_ref().map_err(|e| e.clone())?;
@@ -296,18 +297,18 @@ impl Scheduler {
 
                 match interrupt {
                     Interrupt::Await(fut_id, return_write_addr) => {
-                        self.await_future(curr_coro_id,fut_id, return_write_addr)?;
                         if let Some(fut) = self.futures.get_mut(&fut_id) {
                             if fut.state == FutureState::Complete {
                                 self.complete_future_for(fut_id, curr_coro_id);
+                            } else {
+                                self.await_future(curr_coro_id,fut_id, return_write_addr)?;
+                                       
+                                if let Some(next_coro_id) = self.get_next_runnable(){
+                                    curr_coro_id = next_coro_id;
+                                } else {
+                                    self.running = false;
+                                }
                             }
-                        }
-                        
-                        if let Some(next_coro_id) = self.get_next_runnable(){
-                            self.get_curr_coro_mut(curr_coro_id).cpu.program.pc += 1;
-                            curr_coro_id = next_coro_id;
-                        } else {
-                            self.running = false;
                         }
                     },
                     Interrupt::CreateCoroutine(dest, arg_addr, n_arg_bytes, write_coro_fut_id_addr) => {
@@ -323,7 +324,6 @@ impl Scheduler {
                         
                         let curr_coro = self.get_curr_coro_mut(curr_coro_id);
                         curr_coro.cpu.get_memory_mut().write(write_coro_fut_id_addr, &coro_fut_id);
-                        curr_coro.cpu.program.pc += 1;
                     }    
                     Interrupt::Ret(ret_val_addr, n_ret_bytes) => {
                         let ret_val = {
@@ -335,6 +335,12 @@ impl Scheduler {
                                 if fut.dependants.len() > 0 {
                                     self.complete_future(fut_id, Ok(&ret_val))?;
                                     self.coroutines.remove(&curr_coro_id);
+                                    
+                                    if let Some(next_coro_id) = self.get_next_runnable(){
+                                        curr_coro_id = next_coro_id;
+                                    } else {
+                                        self.running = false;
+                                    }
                                 } else {
                                     // main method, dont drop coro so we can see the memory and shit
                                     let ret_val = {
