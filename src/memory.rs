@@ -183,6 +183,7 @@ impl ByteParseable for Vec<u8> {
 /// both typed and untyped reading, writing, and copying.
 #[derive(Clone)]
 pub struct Memory{
+    base_ptr: usize,
     linear_memory: Vec<u8>,
     write_pointer: usize,
 }
@@ -190,13 +191,21 @@ pub struct Memory{
 impl Memory {
     /// Create a new block of memory
     pub fn new(size: usize) -> Memory {
-        return Memory{linear_memory: vec![0; size], write_pointer: 0};
+        let mut m = Memory{base_ptr: 0, linear_memory: vec![0; size], write_pointer: 0};
+        m.update_base_ptr();
+        return m;
     }
 
+    fn update_base_ptr(&mut self) {
+        self.base_ptr = self.linear_memory.as_ptr() as usize;
+    }
+    
     /// Create a new block of memory with a given capacity
     #[allow(dead_code)]
     pub fn with_capacity(capacity: usize) -> Memory {
-        return Memory{linear_memory: Vec::with_capacity(capacity), write_pointer: 0};
+        let mut m = Memory{base_ptr: 0, linear_memory: Vec::with_capacity(capacity), write_pointer: 0};
+        m.update_base_ptr();
+        return m;
     }
 
     /// Write the given data to the symbol. If the symbol does not already exist, create it.
@@ -245,11 +254,25 @@ impl Memory {
 
     pub fn extend_memory(&mut self, n: usize) {
         self.linear_memory.extend(vec![0u8; n]);
+        self.update_base_ptr();
     }
 
     pub fn extend_memory_to(&mut self, n: usize) {
         self.extend_memory(max(0, n - self.linear_memory.len()));
     }
+
+    pub fn addr_to_idx(&self, addr: usize) -> usize {
+        return addr - self.get_base_ptr();
+    }
+
+    pub fn idx_to_addr(&self, idx: usize) -> usize {
+        return self.base_ptr + idx;
+    }
+
+    pub fn get_base_ptr(&self) -> usize {
+        return self.base_ptr;
+    }
+
 }
 
 impl Default for Memory {

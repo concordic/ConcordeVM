@@ -35,6 +35,7 @@ pub fn execute_instruction(
         Instruction::MemCpy(source, dest, n) => copy_symbol(memory, source, dest, n),
         Instruction::MemExtend(n_bytes) => extend_memory(memory, n_bytes),
         Instruction::MemExtendTo(n_bytes)=> extend_memory_to(memory, n_bytes),
+        Instruction::Ind(addr_location, dest, n) => ind(memory, addr_location, dest, n),
 
         // Arithmetic (force integral ops to i64)
         Instruction::AddSymbols(a, b, dest) => add_symbols::<i64>(memory, a, b, dest),
@@ -156,7 +157,7 @@ impl FloatTrig for f64 {
 
 /// Copy `n` bytes from actual memory address in `[ptr_index]` to dest
 /// This is different from memcpy which uses offsets from the stack base pointer
-fn ind(memory: &mut Memory, ptr_index: usize, n: usize, dest: usize) -> Result<Interrupt, String>{
+fn ind(memory: &mut Memory, ptr_index: usize, dest: usize, n: usize) -> Result<Interrupt, String>{
     let source = memory.read_typed::<usize>(ptr_index);
     copy_symbol(memory, source, dest, n);
     return Ok(Interrupt::Ok);
