@@ -265,12 +265,16 @@ impl Memory {
         return addr - self.get_base_ptr();
     }
 
-    pub fn idx_to_addr(&self, idx: usize) -> usize {
-        return self.base_ptr + idx;
+    pub fn idx_to_addr(&self, idx: usize) -> *mut u8 {
+        return (self.base_ptr + idx) as *mut u8;
     }
 
     pub fn get_base_ptr(&self) -> usize {
         return self.base_ptr;
+    }
+
+    pub fn get_slice(&self, address: usize, n: usize) -> &[u8] {
+        return &self.linear_memory[address..address + n];
     }
 
 }

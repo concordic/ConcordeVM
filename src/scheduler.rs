@@ -1,10 +1,8 @@
 
 use core::panic;
-use std::{collections::{HashMap, HashSet, VecDeque}, future, hash::Hash};
-use crate::{CPU, Interrupt, Memory, memory::ByteSerialisable};
+use std::{collections::{HashMap, HashSet, VecDeque}, ops::Deref};
+use crate::{CPU, Interrupt, Memory, domain::{FFIFuncTable, FFIFunctionInfo, FFIFunctionSignature}, memory::ByteSerialisable};
 use log::info;
-
-use crate::domain::Domain;
 use crate::cpu::Program;
 
 
@@ -44,7 +42,6 @@ impl Future {
 
 }
 
-
 pub struct Coroutine {
     id: Id,
     priority: i32,              // TODO: Use this as weight and make scheduler have a PQ
@@ -83,6 +80,7 @@ pub struct Scheduler {
     _new_spawned_coro_id: Id,
     _new_spawned_future_id: Id,
     running: bool,
+    ffi_func_table: FFIFuncTable
 }
 
 impl Scheduler {
@@ -94,6 +92,7 @@ impl Scheduler {
             _new_spawned_coro_id: 0,     // Id that will be assigned to any coro that spawns, NOT the id of the coro currently being run
             _new_spawned_future_id: 0,
             running: false,
+            ffi_func_table: FFIFuncTable::new()
         }
     }
 
@@ -356,7 +355,28 @@ impl Scheduler {
                         self.delete_future(future_id);
                     },
                     Interrupt::Ok => {},    // we will never actually get this since CPU.run() just continues without returning in this case
-                    Interrupt::EOF => {return Ok(0);}
+                    Interrupt::EOF => {return Ok(0);},
+                    Interrupt::LoadSO(domain_id, lib_path) => {
+                        unsafe { if let Err(x) = self.ffi_func_table.add_domain(domain_id, lib_path) {
+                            return Err(format!("Error loading SO for domain {}: {}", domain_id, x.deref()));
+                        }};
+                    },
+                    Interrupt::AddFFIFn(domain_id, function_id, function_name, arg_types, ret_type) => {
+                        unsafe { if let Err(x) = self.ffi_func_table.load_function_from_so(domain_id, FFIFunctionInfo::new(function_id, function_name, arg_types, ret_type)) {
+                            return Err(format!("Error loading FFI function from domain {}: {}", domain_id, x.deref()));
+                        }};
+                    },
+                    Interrupt::CallFFIFn(domain_id, function_id, arg_addr, n_arg_bytes, ret_addr) => {
+                        let (args, ret_buf) = {
+                            let curr_coro = self.get_curr_coro_mut(curr_coro_id);
+                            let args = curr_coro.cpu.memory.get_slice(arg_addr, n_arg_bytes).to_owned();
+                            let ret_buf = curr_coro.cpu.memory.idx_to_addr(ret_addr);
+                            (args, ret_buf)
+                        };
+
+                        unsafe { self.ffi_func_table.call_function(domain_id, function_id, &args, ret_buf) }.map_err(|e| format!("Error calling FFI function: {}", e))?;
+                        
+                    }
                 };
             };
         } else {

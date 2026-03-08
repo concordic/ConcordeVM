@@ -72,6 +72,19 @@ pub struct FFIFunctionInfo {
     signature: FFIFunctionSignature,
 }
 
+impl FFIFunctionInfo {
+    pub fn new(key: usize, name: String, arg_types: Vec<Type>, ret_type: Type) -> Self {
+        return Self {
+            key,
+            signature: FFIFunctionSignature {
+                name,
+                arg_types,
+                ret_type,
+            },
+        };
+    }
+}
+
 pub struct FFIFunctionSignature {
     name: String,
     arg_types: Vec<Type>,
@@ -180,15 +193,13 @@ impl FFIFuncTable {
         return Ok(());
     }
 
-    pub unsafe fn load_functions_from_so(
+    pub unsafe fn load_function_from_so(
         &mut self,
         domain_id: usize,
-        functions: &[FFIFunctionInfo],
+        func: FFIFunctionInfo,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(domain) = self.domains.get_mut(&domain_id) {
-            for func in functions {
-                unsafe { domain.load_fn(func.key, &func.signature)? };
-            }
+            unsafe { domain.load_fn(func.key, &func.signature)? };
         }
 
         return Ok(());
@@ -241,12 +252,12 @@ fn test() -> Result<(), Box<dyn std::error::Error>> {
     let mut d = FFIFuncTable::new();
     unsafe { d.add_domain(1, "./ffi.so".to_string())? };
     unsafe {
-        d.load_functions_from_so(
+        d.load_function_from_so(
             1,
-            &vec![FFIFunctionInfo {
+            FFIFunctionInfo {
                 key: 1,
                 signature: fn_sig,
-            }],
+            },
         )?
     };
 

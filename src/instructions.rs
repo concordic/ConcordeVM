@@ -5,6 +5,7 @@
 use crate::cpu::Program;
 use crate::io::ConcordeIO;
 use crate::memory::{ByteParseable, ByteSerialisable, Memory};
+use libffi::middle::Type;
 
 use concordeisa::{instructions::Instruction};
 
@@ -68,6 +69,11 @@ pub fn execute_instruction(
         Instruction::Return(address, n) => ret(address, n),
         Instruction::DeleteFuture(future_id) => delete_future(future_id),
 
+        
+        Instruction::LoadSO(domain_id, ref lib_path) => Ok(Interrupt::LoadSO(domain_id, lib_path.clone())),
+        Instruction::AddFFIFn(domain_id, function_id, ref function_name, ref arg_types, ref ret_type) => Ok(Interrupt::AddFFIFn(domain_id, function_id, function_name.clone(), arg_types.clone(), ret_type.clone())),
+        Instruction::CallFFIFn(domain_id, function_id, arg_addr, n_arg_bytes, ret_addr) => Ok(Interrupt::CallFFIFn(domain_id, function_id, arg_addr, n_arg_bytes, ret_addr)),
+
         // Misc.
         Instruction::NoOp() => Ok(Interrupt::Ok),
 
@@ -95,6 +101,11 @@ pub enum Interrupt {
     DeleteFuture(usize),
     //  ret addr, n_ret_bytes
     Ret(usize, usize),
+
+    LoadSO(usize, String),
+    AddFFIFn(usize, usize, String, Vec<Type>, Type),
+    CallFFIFn(usize, usize, usize, usize, usize),
+
     Ok,
     EOF
 }
