@@ -113,7 +113,6 @@ impl Scheduler {
         return self._new_spawned_coro_id;
     }
 
-    // TODO: double check all spawn methods. The stuff with dependants is messed up, a dependant should be something that awaits a future, but in some places is what the future depends on
     pub fn spawn_coro(&mut self, program: Program, priority: i32, args: & dyn ByteSerialisable) -> Result<Id, String> {
         let id = self.get_new_coro_id();
         
@@ -210,6 +209,7 @@ impl Scheduler {
         }
     }
 
+    // TODO: We should handle future removal in some reasonable way. Right now, futures live forever, but we should clean them up somewhow.
     pub fn delete_future(&mut self, future_id: Id) {
         self.futures.remove(&future_id);
     }
