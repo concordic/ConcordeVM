@@ -22,6 +22,11 @@ pub use scheduler::{
     Scheduler
 };
 
+mod domain;
+pub use domain::{
+    Domain
+};
+
 #[macro_use]
 mod errors;
 

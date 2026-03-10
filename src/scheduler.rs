@@ -1,10 +1,15 @@
-
 use core::panic;
-use std::{collections::{HashMap, HashSet, VecDeque}, ops::Deref};
+use std::{collections::{HashMap, HashSet, VecDeque}, ops::Deref, sync::{Arc, RwLock}, thread};
 use crate::{CPU, Interrupt, Memory, domain::{FFIFuncTable, FFIFunctionInfo, FFIFunctionSignature}, memory::ByteSerialisable};
+use libffi::raw::ffi_type;
 use log::info;
 use crate::cpu::Program;
+use crate::domain::generic_ffi_call;
 
+struct FFIResult {
+    fut_id: Id,
+    value: Vec<u8>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FutureState {
@@ -46,7 +51,7 @@ pub struct Coroutine {
     id: Id,
     priority: i32,              // TODO: Use this as weight and make scheduler have a PQ
     state: CoroutineState,
-    depends_on: HashMap<Id, usize>,   // Futures awaited by this coro
+    depends_on: HashMap<Id, usize>,   // Futures awaited by this coro, with the location to write the value to
     dependant: Option<Id>,      // Future whose value is the return value of this coro, if any
     cpu: CPU
 }
@@ -80,7 +85,8 @@ pub struct Scheduler {
     _new_spawned_coro_id: Id,
     _new_spawned_future_id: Id,
     running: bool,
-    ffi_func_table: FFIFuncTable
+    ffi_func_table: Arc<RwLock<FFIFuncTable>>,
+    curr_coro_id: usize
 }
 
 impl Scheduler {
@@ -92,7 +98,8 @@ impl Scheduler {
             _new_spawned_coro_id: 0,     // Id that will be assigned to any coro that spawns, NOT the id of the coro currently being run
             _new_spawned_future_id: 0,
             running: false,
-            ffi_func_table: FFIFuncTable::new()
+            ffi_func_table: Arc::new(RwLock::new(FFIFuncTable::new())),
+            curr_coro_id: 0,
         }
     }
 
@@ -276,18 +283,53 @@ impl Scheduler {
         return fut_id
     }
 
+    fn handle_return(&mut self, coroutine_id: Id, ret_val: & dyn ByteSerialisable, ret_val_addr: usize) -> Result<Option<i8>, String> {
+        if let Some(fut_id) = self.get_curr_coro_mut(coroutine_id).dependant {
+            if let Some(fut) = self.futures.get(&fut_id) {
+                if fut.dependants.len() > 0 {
+                    self.complete_future(fut_id, Ok(ret_val))?;
+                    self.coroutines.remove(&coroutine_id);
+                    
+                    if let Some(next_coro_id) = self.get_next_runnable(){
+                        self.curr_coro_id = next_coro_id;
+                    } else {
+                        self.running = false;
+                    }
+                } else {
+                    // main method, dont drop coro so we can see the memory and shit
+                    let ret_val = {
+                        let curr_coro = self.get_curr_coro_mut(coroutine_id);
+                        curr_coro.cpu.memory.read_typed::<i8>(ret_val_addr)
+                    };  
+                    return Ok(Some(ret_val));
+                }
+            }
+        }
+        return Ok(None);
+    }
+    
+
     pub fn _run(&mut self) -> Result<i8, String>{
+
+        let (tx, rx) = std::sync::mpsc::channel::<FFIResult>();
         
-        if let Some(mut curr_coro_id) = self.get_next_runnable() {
+        if let Some(current_coro_id) = self.get_next_runnable() {
+            self.curr_coro_id = current_coro_id;
             self.running = true;
             loop {
-                 // TODO (SUPER IMPORTANT): DO AN EPOLL OR SOMETHING EQUIV HERE TO RESUME ON AN IO FUTURE COMPLETE, AND TO SET COMPLETED IO FUTURES IN GENERAL
                 if !self.running {
-                    panic!("As of now, the scheduler cannot exit a state where there is no coro to be run. This needs to be fixed by polling to wait for IO future completion");
+                    // Block until we get an FFI future completion. 
+                    rx.recv().ok().map(|FFIResult{fut_id, value}| {
+                        let _ = self.complete_future(fut_id, Ok(&value));
+                    });
                 }
+                
+                rx.try_recv().ok().map(|FFIResult{fut_id, value}| {
+                    let _ = self.complete_future(fut_id, Ok(&value));
+                });
 
                 let interrupt = {
-                    if let Some(coro)= self.coroutines.get_mut(&curr_coro_id){
+                    if let Some(coro)= self.coroutines.get_mut(&self.curr_coro_id){
                         coro.cpu.run()?
                     } else {
                         panic!("Current coroutine not found");
@@ -298,12 +340,12 @@ impl Scheduler {
                     Interrupt::Await(fut_id, return_write_addr) => {
                         if let Some(fut) = self.futures.get_mut(&fut_id) {
                             if fut.state == FutureState::Complete {
-                                self.complete_future_for(fut_id, curr_coro_id);
+                                self.complete_future_for(fut_id, self.curr_coro_id);
                             } else {
-                                self.await_future(curr_coro_id,fut_id, return_write_addr)?;
+                                self.await_future(self.curr_coro_id,fut_id, return_write_addr)?;
                                        
                                 if let Some(next_coro_id) = self.get_next_runnable(){
-                                    curr_coro_id = next_coro_id;
+                                    self.curr_coro_id = next_coro_id;
                                 } else {
                                     self.running = false;
                                 }
@@ -313,7 +355,7 @@ impl Scheduler {
                     Interrupt::CreateCoroutine(dest, arg_addr, n_arg_bytes, write_coro_fut_id_addr) => {
 
                         let (program, args) = {
-                            let curr_coro = self.get_curr_coro_mut(curr_coro_id);
+                            let curr_coro = self.get_curr_coro_mut(self.curr_coro_id);
                             let program = curr_coro.cpu.program.fork_to_pc(dest);
                             let args = curr_coro.cpu.memory.read(arg_addr, n_arg_bytes);
                             (program, args)
@@ -321,35 +363,19 @@ impl Scheduler {
 
                         let coro_fut_id = self.spawn_coro(program, 0, &args)?;
                         
-                        let curr_coro = self.get_curr_coro_mut(curr_coro_id);
+                        let curr_coro = self.get_curr_coro_mut(self.curr_coro_id);
                         curr_coro.cpu.get_memory_mut().write(write_coro_fut_id_addr, &coro_fut_id);
                     }    
                     Interrupt::Ret(ret_val_addr, n_ret_bytes) => {
                         let ret_val = {
-                            let curr_coro = self.get_curr_coro_mut(curr_coro_id);
+                            let curr_coro = self.get_curr_coro_mut(self.curr_coro_id);
                             curr_coro.cpu.memory.read(ret_val_addr, n_ret_bytes)
                         };
-                        if let Some(fut_id) = self.get_curr_coro_mut(curr_coro_id).dependant {
-                            if let Some(fut) = self.futures.get(&fut_id) {
-                                if fut.dependants.len() > 0 {
-                                    self.complete_future(fut_id, Ok(&ret_val))?;
-                                    self.coroutines.remove(&curr_coro_id);
-                                    
-                                    if let Some(next_coro_id) = self.get_next_runnable(){
-                                        curr_coro_id = next_coro_id;
-                                    } else {
-                                        self.running = false;
-                                    }
-                                } else {
-                                    // main method, dont drop coro so we can see the memory and shit
-                                    let ret_val = {
-                                        let curr_coro = self.get_curr_coro_mut(curr_coro_id);
-                                        curr_coro.cpu.memory.read_typed::<i8>(ret_val_addr)
-                                    };  
-                                    return Ok(ret_val);
-                                }
-                            }
+
+                        if let Some(main_ret_value) = self.handle_return(self.curr_coro_id, &ret_val, ret_val_addr)? {
+                            return Ok(main_ret_value);
                         }
+
                     },
                     Interrupt::DeleteFuture(future_id) => {
                         self.delete_future(future_id);
@@ -357,24 +383,43 @@ impl Scheduler {
                     Interrupt::Ok => {},    // we will never actually get this since CPU.run() just continues without returning in this case
                     Interrupt::EOF => {return Ok(0);},
                     Interrupt::LoadSO(domain_id, lib_path) => {
-                        unsafe { if let Err(x) = self.ffi_func_table.add_domain(domain_id, lib_path) {
+                        unsafe { if let Err(x) = self.ffi_func_table.write().unwrap().add_domain(domain_id, lib_path) {
                             return Err(format!("Error loading SO for domain {}: {}", domain_id, x.deref()));
                         }};
                     },
                     Interrupt::AddFFIFn(domain_id, function_id, function_name, arg_types, ret_type) => {
-                        unsafe { if let Err(x) = self.ffi_func_table.load_function_from_so(domain_id, FFIFunctionInfo::new(function_id, function_name, arg_types, ret_type)) {
+                        unsafe { if let Err(x) = self.ffi_func_table.write().unwrap().load_function_from_so(domain_id, FFIFunctionInfo::new(function_id, function_name, arg_types, ret_type)) {
                             return Err(format!("Error loading FFI function from domain {}: {}", domain_id, x.deref()));
                         }};
                     },
                     Interrupt::CallFFIFn(domain_id, function_id, arg_addr, n_arg_bytes, ret_addr) => {
-                        let (args, ret_buf) = {
-                            let curr_coro = self.get_curr_coro_mut(curr_coro_id);
-                            let args = curr_coro.cpu.memory.get_slice(arg_addr, n_arg_bytes).to_owned();
-                            let ret_buf = curr_coro.cpu.memory.idx_to_addr(ret_addr);
-                            (args, ret_buf)
+                        let n_ret_bytes = {
+                            if let Some(fn_n_ret_bytes) = self.ffi_func_table.read().unwrap().get_n_ret_bytes(domain_id, function_id) {
+                                fn_n_ret_bytes
+                            } else {
+                                return Err(format!("FFI function with id {} not found in domain {}", function_id, domain_id));
+                            }
                         };
 
-                        unsafe { self.ffi_func_table.call_function(domain_id, function_id, &args, ret_buf) }.map_err(|e| format!("Error calling FFI function: {}", e))?;
+                        let fut_id = self.spawn_fut();
+                        self.get_curr_coro_mut(self.curr_coro_id).cpu.memory.write(ret_addr, &fut_id);
+                        
+                        let args = {
+                            let curr_coro = self.get_curr_coro_mut(self.curr_coro_id);
+                            let args = curr_coro.cpu.memory.get_slice(arg_addr, n_arg_bytes).to_owned();
+                            args
+                        };
+                        
+                        
+                        let ffi = Arc::clone(&self.ffi_func_table);
+                        let thread_tx = tx.clone();
+                        thread::spawn(move || {
+                            let mut ret_buf = Vec::<u8>::with_capacity(n_ret_bytes);
+                            
+                            unsafe { ffi.read().unwrap().call_function(domain_id, function_id, &args, ret_buf.as_mut_ptr()).unwrap() };
+                            thread_tx.send(FFIResult { fut_id, value: ret_buf }).unwrap();
+                        });
+
                         
                     }
                 };

@@ -2,8 +2,21 @@ use libffi::{
     middle::Type,
     raw::{ffi_call, ffi_cif, ffi_prep_cif, ffi_status_FFI_OK, ffi_type},
 };
+
 use libloading;
 use std::{collections::HashMap, fmt::UpperHex};
+
+#[derive(Debug, Clone)]
+struct FnPtr(*const ());
+
+unsafe impl Send for FnPtr {}
+unsafe impl Sync for FnPtr {}
+
+#[derive(Debug, Clone)]
+struct FFIType(Type);
+
+unsafe impl Send for FFIType {}
+unsafe impl Sync for FFIType {}
 
 pub unsafe fn generic_ffi_call(
     func_ptr: *const (),
@@ -76,26 +89,39 @@ impl FFIFunctionInfo {
     pub fn new(key: usize, name: String, arg_types: Vec<Type>, ret_type: Type) -> Self {
         return Self {
             key,
-            signature: FFIFunctionSignature {
+            signature: FFIFunctionSignature::new(
                 name,
                 arg_types,
                 ret_type,
-            },
+            ),
         };
     }
 }
 
 pub struct FFIFunctionSignature {
     name: String,
-    arg_types: Vec<Type>,
-    ret_type: Type,
+    arg_types: Vec<FFIType>,
+    ret_type: FFIType,
+    ret_size: usize
+}
+
+impl FFIFunctionSignature {
+    pub fn new(name: String, arg_types: Vec<Type>, ret_type: Type) -> FFIFunctionSignature {
+        return FFIFunctionSignature {
+            name: name,
+            arg_types: arg_types.into_iter().map(|t| FFIType(t)).collect(),
+            ret_type: FFIType(ret_type.clone()),
+            ret_size: (unsafe { *ret_type.as_raw_ptr() }).size as usize
+        };
+    }
 }
 
 pub struct FFIFunction {
     name: String,
-    arg_types: Vec<Type>,
-    ret_type: Type,
-    fn_ptr: *const (),
+    arg_types: Vec<FFIType>,
+    ret_type: FFIType,
+    n_ret_bytes: usize,
+    fn_ptr: FnPtr,
 }
 
 pub struct Domain {
@@ -127,7 +153,8 @@ impl Domain {
             name: signature.name.clone(),
             arg_types: signature.arg_types.clone(),
             ret_type: signature.ret_type.clone(),
-            fn_ptr,
+            n_ret_bytes: signature.ret_size,
+            fn_ptr: FnPtr(fn_ptr),
         };
         return Ok(ffi_fn);
     }
@@ -152,13 +179,13 @@ impl Domain {
         let mut arg_types: Vec<*mut ffi_type> = ffi_fn
             .arg_types
             .iter()
-            .map(|t: &Type| t.as_raw_ptr())
+            .map(|t: &FFIType| t.0.as_raw_ptr())
             .collect();
-        let ret_type_ptr = ffi_fn.ret_type.as_raw_ptr();
+        let ret_type_ptr = ffi_fn.ret_type.0.as_raw_ptr();
 
         unsafe {
             generic_ffi_call(
-                ffi_fn.fn_ptr,
+                ffi_fn.fn_ptr.0,
                 &mut arg_types,
                 ret_type_ptr,
                 return_buf,
@@ -218,6 +245,24 @@ impl FFIFuncTable {
 
         return Ok(());
     }
+
+    pub fn get_ffi_fn(&self, domain_id: usize, fn_id: usize) -> Option<&FFIFunction> {
+        if let Some(domain) = self.domains.get(&domain_id) {
+            if let Some(ffi_fn) = domain.functions.get(&fn_id) {
+                return Some(ffi_fn);
+            }
+        }
+        return None;
+    }
+
+    pub fn get_n_ret_bytes(&self, domain_id: usize, fn_id: usize) -> Option<usize> {
+        if let Some(domain) = self.domains.get(&domain_id) {
+            if let Some(ffi_fn) = domain.functions.get(&fn_id) {
+                return Some(ffi_fn.n_ret_bytes);
+            }
+        }
+        return None;
+    }
 }
 
 fn str_to_ffi_type(s: &str) -> Type {
@@ -243,11 +288,11 @@ fn str_to_ffi_type(s: &str) -> Type {
 #[test]
 fn test() -> Result<(), Box<dyn std::error::Error>> {
     let ret_type = Type::structure(vec![Type::u16(), Type::u16(), Type::u32()]);
-    let fn_sig = FFIFunctionSignature {
-        name: "add".to_string(),
-        arg_types: vec![Type::u16(), Type::u16()],
-        ret_type: ret_type,
-    };
+    let fn_sig = FFIFunctionSignature::new(
+        "add".to_string(),
+        vec![Type::u16(), Type::u16()],
+        ret_type
+    );
 
     let mut d = FFIFuncTable::new();
     unsafe { d.add_domain(1, "./ffi.so".to_string())? };
@@ -272,6 +317,8 @@ fn test() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     print!("{:02X}\n", ret_buffer);
+
+    (unsafe { *Type::structure(vec![Type::u16(), Type::u16(), Type::u32()]).as_raw_ptr() }).size;
 
     Ok(())
 }
