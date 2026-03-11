@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use cloneable_any::CloneableAny;
 use concordeisa::{instructions::Instruction};
+use libffi::middle::Type;
 
 use crate::memory::{ByteParseable, ByteSerialisable};
 
@@ -116,3 +117,31 @@ fn function_calls() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn test_ffi() -> Result<(), Box<dyn std::error::Error>> {
+    let instructions = vec![
+        Instruction::MemExtend(100),    // 0    pseudomain
+        Instruction::LoadSO(1, "./ffi.so".to_string()),
+        Instruction::AddFFIFn(1, 1, "max".to_string(), vec![Type::u64(), Type::u64()], Type::u64()),
+        Instruction::CreateCoroutine(12, 0, 0, 0),
+        Instruction::Await(0, 0),
+        Instruction::Return(0, 8),
+
+        Instruction::MemExtend(1000),   // 6    add_ffi
+        Instruction::WriteIntToSymbol(0, 10i64),
+        Instruction::WriteIntToSymbol(8, 100i64),
+        Instruction::CallFFIFn(1, 1, 0, 16, 16),
+        Instruction::Await(16, 24),
+        Instruction::Return(24, 8),
+
+        Instruction::MemExtend(1000),   // 12 -- int main
+        Instruction::CreateCoroutine(6, 0, 0, 0),
+        Instruction::Await(0, 0),
+        Instruction::Return(0, 8)
+    ];
+
+    let memory = execute(instructions)?;
+    print!("Done executing");
+    check_symbol_eq(memory, 0, 100i64);
+    Ok(())
+}
