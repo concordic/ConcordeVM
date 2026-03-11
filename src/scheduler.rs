@@ -9,6 +9,7 @@ use crate::domain::generic_ffi_call;
 struct FFIResult {
     fut_id: Id,
     value: Vec<u8>,
+    
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,7 +53,7 @@ pub struct Coroutine {
     priority: i32,              // TODO: Use this as weight and make scheduler have a PQ
     state: CoroutineState,
     depends_on: HashMap<Id, usize>,   // Futures awaited by this coro, with the location to write the value to
-    dependant: Option<Id>,      // Future whose value is the return value of this coro, if any
+    return_to_fut: Option<Id>,      // Future whose value is the return value of this coro, if any
     cpu: CPU
 }
 
@@ -63,7 +64,7 @@ impl Coroutine {
             priority: priority,
             state: CoroutineState::Runnable,
             depends_on: HashMap::new(),
-            dependant: None,
+            return_to_fut: None,
             cpu: CPU::with_program(0, program)
         }
     }
@@ -119,7 +120,7 @@ impl Scheduler {
         let fut_id = self.spawn_fut();
 
         let mut coroutine = Coroutine::new(id, priority, program);
-        coroutine.dependant = Some(fut_id);
+        coroutine.return_to_fut = Some(fut_id);
         
         {
             let memory = coroutine.cpu.get_memory_mut();
@@ -186,6 +187,7 @@ impl Scheduler {
         Ok(())
     }
 
+    // Can only be called on a complete future, panics otherwise
     pub fn complete_future_for(&mut self, future_id: Id, coroutine_id: Id) {
         let value = {
             if let Some(fut) = self.futures.get(&future_id) {
@@ -209,7 +211,10 @@ impl Scheduler {
         }
     }
 
-    // TODO: We should handle future removal in some reasonable way. Right now, futures live forever, but we should clean them up somewhow.
+    // This should be called by guest code because we want to support returning futures from Concorde functions
+    // The only way to do this is for the caller to create a future and pass its id to the callee, so we cannot
+    // just cleanup all spawned coros for a stack frame when it returns. This somewhat starts behaving like manually managed heap memory (from the guest code perspective)
+    // Leaving this dangerous for now in that awaiting a deleted future will cause a panic
     pub fn delete_future(&mut self, future_id: Id) {
         self.futures.remove(&future_id);
     }
@@ -233,24 +238,6 @@ impl Scheduler {
         self.ready_queue.push_back(coroutine_id);
         
         info!("Yielded coroutine {}", coroutine_id);
-        Ok(())
-    }
-
-    pub fn finish_coroutine(&mut self, coroutine_id: Id, result: Result<& dyn ByteSerialisable, String>) -> Result<(), String> {
-        {        
-            let coroutine: &mut Coroutine = self.coroutines.get_mut(&coroutine_id)
-                .ok_or_else(|| format!("Coroutine {} not found", coroutine_id))?;
-            
-            coroutine.state = CoroutineState::Finished;
-        }
-        
-        let coroutine = self.coroutines.get(&coroutine_id).ok_or_else(|| format!("Coroutine {} not found", coroutine_id))?;
-        // If this coroutine has a dependant future, complete it
-        if let Some(future_sym) = coroutine.dependant {
-            self.complete_future(future_sym.clone(), result)?;
-        }
-
-        info!("Finished coroutine {}", coroutine_id);
         Ok(())
     }
 
@@ -283,26 +270,27 @@ impl Scheduler {
         return fut_id
     }
 
+    // This function handles returns only for Concorde ret opcodes, not for general future completion or FFI Calls.
+    // It returns Some(i8) if the return value is from the main method and should be returned by the scheduler, and None otherwise.
     fn handle_return(&mut self, coroutine_id: Id, ret_val: & dyn ByteSerialisable, ret_val_addr: usize) -> Result<Option<i8>, String> {
-        if let Some(fut_id) = self.get_curr_coro_mut(coroutine_id).dependant {
-            if let Some(fut) = self.futures.get(&fut_id) {
-                if fut.dependants.len() > 0 {
-                    self.complete_future(fut_id, Ok(ret_val))?;
-                    self.coroutines.remove(&coroutine_id);
-                    
-                    if let Some(next_coro_id) = self.get_next_runnable(){
-                        self.curr_coro_id = next_coro_id;
-                    } else {
-                        self.running = false;
-                    }
+        if let Some(fut_id) = self.get_curr_coro_mut(coroutine_id).return_to_fut {
+            // coro id 1 is the entrypoint coro
+            if coroutine_id != 1 {
+                self.complete_future(fut_id, Ok(ret_val))?;
+                self.coroutines.remove(&coroutine_id);
+                
+                if let Some(next_coro_id) = self.get_next_runnable(){
+                    self.curr_coro_id = next_coro_id;
                 } else {
-                    // main method, dont drop coro so we can see the memory and shit
-                    let ret_val = {
-                        let curr_coro = self.get_curr_coro_mut(coroutine_id);
-                        curr_coro.cpu.memory.read_typed::<i8>(ret_val_addr)
-                    };  
-                    return Ok(Some(ret_val));
+                    self.running = false;
                 }
+            } else {
+                // main method, dont drop coro so we can see the memory and shit
+                let ret_val = {
+                    let curr_coro = self.get_curr_coro_mut(coroutine_id);
+                    curr_coro.cpu.memory.read_typed::<i8>(ret_val_addr)
+                };  
+                return Ok(Some(ret_val));
             }
         }
         return Ok(None);
@@ -323,13 +311,15 @@ impl Scheduler {
                         let _ = self.complete_future(fut_id, Ok(&value));
                     });
                 }
-                
-                rx.try_recv().ok().map(|FFIResult{fut_id, value}| {
+                self.running = true;
+                // Consume all available FFI messages
+                for FFIResult{fut_id, value} in rx.try_iter() {
                     let _ = self.complete_future(fut_id, Ok(&value));
-                });
+                }
 
                 let interrupt = {
                     if let Some(coro)= self.coroutines.get_mut(&self.curr_coro_id){
+                        coro.state = CoroutineState::Running;
                         coro.cpu.run()?
                     } else {
                         panic!("Current coroutine not found");
@@ -350,6 +340,8 @@ impl Scheduler {
                                     self.running = false;
                                 }
                             }
+                        } else {
+                            panic!("Awaited future {}, which does not exist", fut_id);
                         }
                     },
                     Interrupt::CreateCoroutine(dest, arg_addr, n_arg_bytes, write_coro_fut_id_addr) => {
@@ -411,12 +403,15 @@ impl Scheduler {
                         };
                         
                         
-                        let ffi = Arc::clone(&self.ffi_func_table);
+                        let ffi: Arc<RwLock<FFIFuncTable>> = Arc::clone(&self.ffi_func_table);
                         let thread_tx = tx.clone();
                         thread::spawn(move || {
-                            let mut ret_buf = Vec::<u8>::with_capacity(n_ret_bytes);
+                            let mut ret_buf = vec![0u8; n_ret_bytes];
                             
-                            unsafe { ffi.read().unwrap().call_function(domain_id, function_id, &args, ret_buf.as_mut_ptr()).unwrap() };
+                            unsafe { ffi.read().unwrap().call_function(domain_id, function_id, &args, ret_buf.as_mut_ptr())
+                                .unwrap_or_else(|e| panic!("Error calling FFI function with id {} in domain {}: {}", function_id, domain_id, e.deref()));
+                            };  // TODO: make this return the error through TX so the future can be set to ERROR state.
+                            print!("FFI return buffer: {:?}\n", ret_buf);
                             thread_tx.send(FFIResult { fut_id, value: ret_buf }).unwrap();
                         });
 
