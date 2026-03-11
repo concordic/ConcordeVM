@@ -5,11 +5,10 @@
 use crate::log_and_return_err;
 
 use log::error;
-use std::{cmp, mem};
+use std::{cmp::{self, max}, mem};
 
 pub trait ByteSerialisable {
     fn to_bytes(&self) -> Vec<u8>;
-    fn from_bytes(bytes: & [u8]) -> Self;
     fn write_bytes_to(&self, vec: &mut Vec<u8>, address: usize);
     fn append_bytes_to(&self, vec: &mut Vec<u8>);
     fn get_size(&self) -> usize;
@@ -21,11 +20,6 @@ macro_rules! impl_for_numerics {
             impl ByteSerialisable for $t {
                 fn to_bytes(&self) -> Vec<u8> {
                     return Vec::from(self.to_ne_bytes());
-                }
-
-                fn from_bytes(bytes: & [u8]) -> Self {
-                    let buf: [u8; mem::size_of::<Self>()] = bytes.try_into().expect("wrong buffer size for from_bytes");
-                    return Self::from_ne_bytes(buf);
                 }
 
                 fn write_bytes_to(&self, vec: &mut Vec<u8>, address: usize){
@@ -46,19 +40,13 @@ macro_rules! impl_for_numerics {
     };
 }
 
-impl_for_numerics!(u8, u16, u32, u64, i8, i16, i32, i64, i128, u128, f32, f64);
+impl_for_numerics!(u8, u16, u32, u64, i8, i16, i32, i64, i128, u128, f32, f64, usize);
 
 impl ByteSerialisable for String {
     fn to_bytes(&self) -> Vec<u8> {
 
         return self.chars().map(|c| c as u8).collect();
     }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-        String::from_utf8(bytes[..end].to_vec()).expect("invalid UTF-8")
-    }
-    
 
     fn write_bytes_to(&self, vec: &mut Vec<u8>, address: usize) {
         for (offset, c) in self.chars().enumerate(){
@@ -84,10 +72,6 @@ impl ByteSerialisable for bool {
         }
     }
 
-    fn from_bytes(bytes: & [u8]) -> Self {
-        return bytes[0] == 1u8;
-    }
-
     fn write_bytes_to(&self, vec: &mut Vec<u8>, address: usize) {
         vec[address] = if *self {1u8} else {0u8};
     }
@@ -106,13 +90,9 @@ impl ByteSerialisable for Vec<u8> {
         return self.clone();
     }
 
-    fn from_bytes(bytes: & [u8]) -> Self {
-        return bytes.to_vec();
-    }
-
     fn write_bytes_to(&self, vec: &mut Vec<u8>, address: usize) {
         for (offset, value) in self.iter().enumerate() {
-            vec[address + offset] = self[address + offset];
+            vec[address + offset] = *value;
         }
     }
 
@@ -125,12 +105,85 @@ impl ByteSerialisable for Vec<u8> {
     }
 }
 
+impl<T: ByteSerialisable + Clone> ByteSerialisable for [T] {
+    fn to_bytes(&self) -> Vec<u8> {
+        return self.to_vec().iter().map(|x| x.to_bytes()).flatten().collect();
+    }
+
+    fn write_bytes_to(&self, vec: &mut Vec<u8>, address: usize) {
+        let mut offset: usize = 0;
+        for value in self.iter() {
+            for byte in value.to_bytes() {
+                vec[address + offset] = byte;
+                offset += 1;
+            }
+        }
+    }
+
+    fn append_bytes_to(&self, vec: &mut Vec<u8>) {
+        vec.extend(self.to_bytes());
+    }
+
+    fn get_size(&self) -> usize {
+        return self.len();
+    }
+}
+
+pub trait ByteParseable {
+    fn from_bytes(bytes: & [u8]) -> Self;
+}
+
+
+
+macro_rules! impl_for_numerics {
+    ($($t:ty),*) => {
+        $(
+            impl ByteParseable for $t {
+                fn from_bytes(bytes: & [u8]) -> Self {
+                    let buf: [u8; mem::size_of::<Self>()] = bytes.try_into().expect("wrong buffer size for from_bytes");
+                    return Self::from_ne_bytes(buf);
+                }
+            }
+        )*
+    };
+}
+
+impl_for_numerics!(u8, u16, u32, u64, i8, i16, i32, i64, i128, u128, f32, f64, usize);
+
+
+
+impl ByteParseable for String {
+    
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        String::from_utf8(bytes[..end].to_vec()).expect("invalid UTF-8")
+    }
+    
+}
+
+impl ByteParseable for bool {
+   
+    fn from_bytes(bytes: & [u8]) -> Self {
+        return bytes[0] == 1u8;
+    }
+
+}
+
+impl ByteParseable for Vec<u8> {
+
+    fn from_bytes(bytes: & [u8]) -> Self {
+        return bytes.to_vec();
+    }
+
+}
+
 /// `Memory` is what actually handles reading and writing from the symbol table.
 ///
 /// It wraps a `HashMap<Symbol, Data>` and implements basic memory operations over that, including
 /// both typed and untyped reading, writing, and copying.
 #[derive(Clone)]
 pub struct Memory{
+    base_ptr: usize,
     linear_memory: Vec<u8>,
     write_pointer: usize,
 }
@@ -138,20 +191,28 @@ pub struct Memory{
 impl Memory {
     /// Create a new block of memory
     pub fn new(size: usize) -> Memory {
-        return Memory{linear_memory: vec![0; size], write_pointer: 0};
+        let mut m = Memory{base_ptr: 0, linear_memory: vec![0; size], write_pointer: 0};
+        m.update_base_ptr();
+        return m;
     }
 
+    fn update_base_ptr(&mut self) {
+        self.base_ptr = self.linear_memory.as_ptr() as usize;
+    }
+    
     /// Create a new block of memory with a given capacity
     #[allow(dead_code)]
     pub fn with_capacity(capacity: usize) -> Memory {
-        return Memory{linear_memory: Vec::with_capacity(capacity), write_pointer: 0};
+        let mut m = Memory{base_ptr: 0, linear_memory: Vec::with_capacity(capacity), write_pointer: 0};
+        m.update_base_ptr();
+        return m;
     }
 
     /// Write the given data to the symbol. If the symbol does not already exist, create it.
     ///
     /// Returns nothing and should never be able to fail, since any Symbol can we written to, even
     /// if it is undefined.
-    pub fn write(&mut self, address: usize, data: & impl ByteSerialisable) {
+    pub fn write(&mut self, address: usize, data: & dyn ByteSerialisable) {
         data.write_bytes_to(&mut self.linear_memory, address);
     }
 
@@ -159,9 +220,13 @@ impl Memory {
     ///
     /// If the symbol does not exist, return an error due to trying to read an undefined symbol. If the symbol does exist, but is
     /// not of the expected type, return an error.
-    pub fn read_typed<T: ByteSerialisable + 'static>(&self, address: usize) -> T {
+    pub fn read_typed<T: ByteSerialisable + ByteParseable + 'static>(&self, address: usize) -> T {
         let slice = &self.linear_memory[address..address + mem::size_of::<T>()];
         return T::from_bytes(slice);
+    }
+
+    pub fn read(&self, address: usize, n: usize) -> Vec<u8> {
+        return self.linear_memory[address..address + n].to_vec();
     }
 
     /// Copy the data from source to dest. If dest doesn't exist yet, create it.
@@ -189,7 +254,29 @@ impl Memory {
 
     pub fn extend_memory(&mut self, n: usize) {
         self.linear_memory.extend(vec![0u8; n]);
+        self.update_base_ptr();
     }
+
+    pub fn extend_memory_to(&mut self, n: usize) {
+        self.extend_memory(max(0, n - self.linear_memory.len()));
+    }
+
+    pub fn addr_to_idx(&self, addr: usize) -> usize {
+        return addr - self.get_base_ptr();
+    }
+
+    pub fn idx_to_addr(&self, idx: usize) -> *mut u8 {
+        return (self.base_ptr + idx) as *mut u8;
+    }
+
+    pub fn get_base_ptr(&self) -> usize {
+        return self.base_ptr;
+    }
+
+    pub fn get_slice(&self, address: usize, n: usize) -> &[u8] {
+        return &self.linear_memory[address..address + n];
+    }
+
 }
 
 impl Default for Memory {

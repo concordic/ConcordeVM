@@ -1,29 +1,30 @@
 use std::fmt::Debug;
+use std::rc::Rc;
 
 use cloneable_any::CloneableAny;
 use concordeisa::{instructions::Instruction};
+use libffi::middle::Type;
 
-use crate::memory::ByteSerialisable;
+use crate::memory::{ByteParseable, ByteSerialisable};
 
-use crate::{CPU};
+use crate::{CPU, Memory, Program, Scheduler};
 
-fn execute(instructions: Vec<Instruction>) -> CPU {
+fn execute(instructions: Vec<Instruction>) -> Result<Memory, String> {
     execute_entrypoint(instructions, 0)
 }
 
-fn execute_entrypoint(instructions: Vec<Instruction>, entrypoint: usize) -> CPU {
-    let mut cpu = CPU::new(1000);
-    cpu.load_instructions(&instructions);
-    cpu.init_execution(entrypoint);
-    cpu.extend_memory(24);
+fn execute_entrypoint(instructions: Vec<Instruction>, entrypoint: usize) -> Result<Memory, String> {
+    let instructions: std::rc::Rc<Vec<Instruction>> = Rc::new(instructions);
+    let program: Program = Program { instructions: instructions, pc: entrypoint };
 
-    cpu.run();
+    let mut scheduler = Scheduler::new();
+    scheduler.run(program)?;
 
-    cpu
+    return Ok(scheduler.get_coro(1).memory_dump());
 }
 
-fn check_symbol_eq<T: PartialEq + Debug + CloneableAny + ByteSerialisable>(cpu: CPU, symbol: usize, value: T) {
-    let x =  cpu.get_memory().read_typed::<T>(symbol);
+fn check_symbol_eq<T: PartialEq + Debug + CloneableAny + ByteSerialisable + ByteParseable>(memory:Memory, symbol: usize, value: T) {
+    let x =  memory.read_typed::<T>(symbol);
     assert_eq!(x, value)
 }
 
@@ -44,28 +45,103 @@ fn check_symbol_eq<T: PartialEq + Debug + CloneableAny + ByteSerialisable>(cpu: 
 //     execute(instructions);
 // }
 
+
+
+/*
+Foo:
+    MemExtend 1000
+    0 <- 1
+    8 <- 2
+    [16] = [0] + [8]
+    ret 8 bytes at [16]
+
+Main:
+    MemExtend 1000
+    
+*/
+
 #[test]
-fn basic_arithmetic() {
+fn basic_arithmetic() -> Result<(), Box<dyn std::error::Error>> {
     let instructions = vec![
+        Instruction::MemExtend(1000),
         Instruction::WriteIntToSymbol(0, 1i64),
         Instruction::WriteIntToSymbol(8, 2),
         Instruction::AddSymbols(0, 8, 16),
         Instruction::Return(16, 8)
     ];
 
-    let cpu = execute(instructions);
+    let memory = execute(instructions)?;
     print!("Done executing");
-    check_symbol_eq(cpu, 16, 3i64);
+    check_symbol_eq(memory, 16, 3i64);
+    Ok(())
 }
 
 
 #[test]
-fn strings() {
+fn strings() -> Result<(), Box<dyn std::error::Error>> {
     let instructions = vec![
+        Instruction::MemExtend(1000),
         Instruction::WriteStringToSymbol(0, String::from("Hello, world!")),
         Instruction::Return(0, 24)
     ];
-    let cpu = execute(instructions);
+    let memory = execute(instructions)?;
     print!("Done executing");
-    check_symbol_eq(cpu, 0, String::from("Hello, world!"));
+    check_symbol_eq(memory, 0, String::from("Hello, world!"));
+    Ok(())
+}
+
+
+#[test]
+fn function_calls() -> Result<(), Box<dyn std::error::Error>> {
+    let instructions = vec![
+        Instruction::MemExtend(100),
+        Instruction::CreateCoroutine(9, 0, 0, 0),
+        Instruction::Await(0, 0),
+        Instruction::Return(0, 8),
+
+        Instruction::MemExtend(1000),
+        Instruction::WriteIntToSymbol(0, 1i64),
+        Instruction::WriteIntToSymbol(8, 2i64),
+        Instruction::AddSymbols(0, 8, 16),
+        Instruction::Return(16, 8),
+
+        Instruction::MemExtend(1000),
+        Instruction::CreateCoroutine(4, 0, 0, 0),
+        Instruction::Await(0, 0),
+        Instruction::Return(0, 8)
+    ];
+
+    let memory = execute(instructions)?;
+    print!("Done executing");
+    check_symbol_eq(memory, 0, 3i64);
+    Ok(())
+}
+
+#[test]
+fn test_ffi() -> Result<(), Box<dyn std::error::Error>> {
+    let instructions = vec![
+        Instruction::MemExtend(100),    // 0    pseudomain
+        Instruction::LoadSO(1, "./ffi.so".to_string()),
+        Instruction::AddFFIFn(1, 1, "max".to_string(), vec![Type::u64(), Type::u64()], Type::u64()),
+        Instruction::CreateCoroutine(12, 0, 0, 0),
+        Instruction::Await(0, 0),
+        Instruction::Return(0, 8),
+
+        Instruction::MemExtend(1000),   // 6    add_ffi
+        Instruction::WriteIntToSymbol(0, 10i64),
+        Instruction::WriteIntToSymbol(8, 100i64),
+        Instruction::CallFFIFn(1, 1, 0, 16, 16),
+        Instruction::Await(16, 24),
+        Instruction::Return(24, 8),
+
+        Instruction::MemExtend(1000),   // 12 -- int main
+        Instruction::CreateCoroutine(6, 0, 0, 0),
+        Instruction::Await(0, 0),
+        Instruction::Return(0, 8)
+    ];
+
+    let memory = execute(instructions)?;
+    print!("Done executing");
+    check_symbol_eq(memory, 0, 100i64);
+    Ok(())
 }

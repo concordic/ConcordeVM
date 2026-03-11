@@ -13,6 +13,19 @@ pub use memory::{
 
 mod io;
 mod instructions;
+pub use instructions::{
+    Interrupt
+};
+
+mod scheduler;
+pub use scheduler::{
+    Scheduler
+};
+
+mod domain;
+pub use domain::{
+    Domain
+};
 
 #[macro_use]
 mod errors;
