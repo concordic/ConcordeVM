@@ -103,7 +103,7 @@ pub enum Interrupt {
     Ret(usize, usize),
 
     LoadSO(usize, String),
-    AddFFIFn(usize, usize, String, Vec<Type>, Type),
+    UnloadSO(usize),
     CallFFIFn(usize, usize, usize, usize, usize),
 
     Ok,

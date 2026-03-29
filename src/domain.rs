@@ -220,6 +220,13 @@ impl FFIFuncTable {
         return Ok(());
     }
 
+    pub unsafe fn unload_domain(&mut self, domain_id: usize) -> Result<(), Box<dyn std::error::Error>> {
+        if self.domains.remove(&domain_id).is_none() {
+            return Err(format!("Domain with id {} not found", domain_id).into());
+        }
+        return Ok(());
+    }
+
     pub unsafe fn load_function_from_so(
         &mut self,
         domain_id: usize,
