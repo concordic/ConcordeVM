@@ -1,3 +1,5 @@
+use concordeisa::instructions::FfiTypeDesc;
+
 use libffi::{
     middle::Type,
     raw::{ffi_call, ffi_cif, ffi_prep_cif, ffi_status_FFI_OK, ffi_type},
@@ -86,7 +88,7 @@ pub struct FFIFunctionInfo {
 }
 
 impl FFIFunctionInfo {
-    pub fn new(key: usize, name: String, arg_types: Vec<Type>, ret_type: Type) -> Self {
+    pub fn new(key: usize, name: String, arg_types: Vec<FfiTypeDesc>, ret_type: FfiTypeDesc) -> Self {
         return Self {
             key,
             signature: FFIFunctionSignature::new(
@@ -106,12 +108,12 @@ pub struct FFIFunctionSignature {
 }
 
 impl FFIFunctionSignature {
-    pub fn new(name: String, arg_types: Vec<Type>, ret_type: Type) -> FFIFunctionSignature {
+    pub fn new(name: String, arg_types: Vec<FfiTypeDesc>, ret_type: FfiTypeDesc) -> FFIFunctionSignature {
         return FFIFunctionSignature {
             name: name,
-            arg_types: arg_types.into_iter().map(|t| FFIType(t)).collect(),
-            ret_type: FFIType(ret_type.clone()),
-            ret_size: (unsafe { *ret_type.as_raw_ptr() }).size as usize
+            arg_types: arg_types.into_iter().map(|t| FFIType(t.to_libffi_type())).collect(),
+            ret_type: FFIType(ret_type.to_libffi_type()),
+            ret_size: (unsafe { *ret_type.to_libffi_type().as_raw_ptr() }).size as usize
         };
     }
 }
@@ -220,6 +222,13 @@ impl FFIFuncTable {
         return Ok(());
     }
 
+    pub unsafe fn unload_domain(&mut self, domain_id: usize) -> Result<(), Box<dyn std::error::Error>> {
+        if self.domains.remove(&domain_id).is_none() {
+            return Err(format!("Domain with id {} not found", domain_id).into());
+        }
+        return Ok(());
+    }
+
     pub unsafe fn load_function_from_so(
         &mut self,
         domain_id: usize,
@@ -287,10 +296,10 @@ fn str_to_ffi_type(s: &str) -> Type {
 
 #[test]
 fn test() -> Result<(), Box<dyn std::error::Error>> {
-    let ret_type = Type::structure(vec![Type::u16(), Type::u16(), Type::u32()]);
+    let ret_type = FfiTypeDesc::Struct(vec![FfiTypeDesc::U16, FfiTypeDesc::U16, FfiTypeDesc::U32]);
     let fn_sig = FFIFunctionSignature::new(
         "add".to_string(),
-        vec![Type::u16(), Type::u16()],
+        vec![FfiTypeDesc::U16, FfiTypeDesc::U16],
         ret_type
     );
 

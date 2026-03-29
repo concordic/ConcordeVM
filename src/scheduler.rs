@@ -379,6 +379,11 @@ impl Scheduler {
                             return Err(format!("Error loading SO for domain {}: {}", domain_id, x.deref()));
                         }};
                     },
+                    Interrupt::UnloadSO(domain_id) => {
+                        unsafe { if let Err(x) = self.ffi_func_table.write().unwrap().unload_domain(domain_id) {
+                            return Err(format!("Error unloading SO for domain {}: {}", domain_id, x.deref()));
+                        }};
+                    },
                     Interrupt::AddFFIFn(domain_id, function_id, function_name, arg_types, ret_type) => {
                         unsafe { if let Err(x) = self.ffi_func_table.write().unwrap().load_function_from_so(domain_id, FFIFunctionInfo::new(function_id, function_name, arg_types, ret_type)) {
                             return Err(format!("Error loading FFI function from domain {}: {}", domain_id, x.deref()));

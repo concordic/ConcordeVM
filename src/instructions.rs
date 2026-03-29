@@ -3,11 +3,12 @@
 //! Provides a function to execute arbitrary instructions as defined by the ConcordeISA.
 
 use crate::cpu::Program;
+use crate::domain;
 use crate::io::ConcordeIO;
 use crate::memory::{ByteParseable, ByteSerialisable, Memory};
 use libffi::middle::Type;
 
-use concordeisa::{instructions::Instruction};
+use concordeisa::{instructions::{Instruction, FfiTypeDesc}};
 
 use log::info;
 
@@ -71,6 +72,7 @@ pub fn execute_instruction(
 
         
         Instruction::LoadSO(domain_id, ref lib_path) => Ok(Interrupt::LoadSO(domain_id, lib_path.clone())),
+        Instruction::UnloadSO(domain_id) => Ok(Interrupt::UnloadSO(domain_id)),
         Instruction::AddFFIFn(domain_id, function_id, ref function_name, ref arg_types, ref ret_type) => Ok(Interrupt::AddFFIFn(domain_id, function_id, function_name.clone(), arg_types.clone(), ret_type.clone())),
         Instruction::CallFFIFn(domain_id, function_id, arg_addr, n_arg_bytes, ret_addr) => Ok(Interrupt::CallFFIFn(domain_id, function_id, arg_addr, n_arg_bytes, ret_addr)),
 
@@ -103,7 +105,8 @@ pub enum Interrupt {
     Ret(usize, usize),
 
     LoadSO(usize, String),
-    AddFFIFn(usize, usize, String, Vec<Type>, Type),
+    UnloadSO(usize),
+    AddFFIFn(usize, usize, String, Vec<FfiTypeDesc>, FfiTypeDesc),
     CallFFIFn(usize, usize, usize, usize, usize),
 
     Ok,
@@ -168,12 +171,20 @@ impl FloatTrig for f64 {
 
 /// Copy `n` bytes from actual memory address in `[ptr_index]` to dest
 /// This is different from memcpy which uses offsets from the stack base pointer
-fn ind(memory: &mut Memory, ptr_index: usize, dest: usize, n: usize) -> Result<Interrupt, String>{
-    let source = memory.read_typed::<usize>(ptr_index);
-    copy_symbol(memory, source, dest, n);
+fn ind(memory: &mut Memory, address: usize, dest: usize, n: usize) -> Result<Interrupt, String>{
+    let source = address as *const u8;
+    if source.is_null() {
+        return Err("Null pointer dereference".to_string());
+    }
+    let mut offset: isize = 0;
+    while offset < n as isize {
+        let byte = unsafe { *source.offset(offset) };
+        memory.write(dest, &byte);
+        offset += 1;
+
+    }
     return Ok(Interrupt::Ok);
 }
-
 
 /// Add the integers in `a` and `b` together, and put the result in `dest`.
 /// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
