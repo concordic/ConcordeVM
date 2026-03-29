@@ -168,12 +168,20 @@ impl FloatTrig for f64 {
 
 /// Copy `n` bytes from actual memory address in `[ptr_index]` to dest
 /// This is different from memcpy which uses offsets from the stack base pointer
-fn ind(memory: &mut Memory, ptr_index: usize, dest: usize, n: usize) -> Result<Interrupt, String>{
-    let source = memory.read_typed::<usize>(ptr_index);
-    copy_symbol(memory, source, dest, n);
+fn ind(memory: &mut Memory, address: usize, dest: usize, n: usize) -> Result<Interrupt, String>{
+    let source = address as *const u8;
+    if source.is_null() {
+        return Err("Null pointer dereference".to_string());
+    }
+    let mut offset: isize = 0;
+    while offset < n as isize {
+        let byte = unsafe { *source.offset(offset) };
+        memory.write(dest, &byte);
+        offset += 1;
+
+    }
     return Ok(Interrupt::Ok);
 }
-
 
 /// Add the integers in `a` and `b` together, and put the result in `dest`.
 /// Returns an error if either `a` or `b` is undefined, or does not contain an integer.
