@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::rc::Rc;
 
 use cloneable_any::CloneableAny;
-use concordeisa::{instructions::Instruction};
+use concordeisa::{instructions::{Instruction, FfiTypeDesc}};
 use libffi::middle::Type;
 
 use crate::memory::{ByteParseable, ByteSerialisable};
@@ -122,7 +122,7 @@ fn test_ffi() -> Result<(), Box<dyn std::error::Error>> {
     let instructions = vec![
         Instruction::MemExtend(100),    // 0    pseudomain
         Instruction::LoadSO(1, "./ffi.so".to_string()),
-        Instruction::AddFFIFn(1, 1, "max".to_string(), vec![Type::u64(), Type::u64()], Type::u64()),
+        Instruction::AddFFIFn(1, 1, "max".to_string(), vec![FfiTypeDesc::U16, FfiTypeDesc::U16], FfiTypeDesc::U16),
         Instruction::CreateCoroutine(12, 0, 0, 0),
         Instruction::Await(0, 0),
         Instruction::Return(0, 8),

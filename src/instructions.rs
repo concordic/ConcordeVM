@@ -3,11 +3,12 @@
 //! Provides a function to execute arbitrary instructions as defined by the ConcordeISA.
 
 use crate::cpu::Program;
+use crate::domain;
 use crate::io::ConcordeIO;
 use crate::memory::{ByteParseable, ByteSerialisable, Memory};
 use libffi::middle::Type;
 
-use concordeisa::{instructions::Instruction};
+use concordeisa::{instructions::{Instruction, FfiTypeDesc}};
 
 use log::info;
 
@@ -71,6 +72,7 @@ pub fn execute_instruction(
 
         
         Instruction::LoadSO(domain_id, ref lib_path) => Ok(Interrupt::LoadSO(domain_id, lib_path.clone())),
+        Instruction::UnloadSO(domain_id) => Ok(Interrupt::UnloadSO(domain_id)),
         Instruction::AddFFIFn(domain_id, function_id, ref function_name, ref arg_types, ref ret_type) => Ok(Interrupt::AddFFIFn(domain_id, function_id, function_name.clone(), arg_types.clone(), ret_type.clone())),
         Instruction::CallFFIFn(domain_id, function_id, arg_addr, n_arg_bytes, ret_addr) => Ok(Interrupt::CallFFIFn(domain_id, function_id, arg_addr, n_arg_bytes, ret_addr)),
 
@@ -104,6 +106,7 @@ pub enum Interrupt {
 
     LoadSO(usize, String),
     UnloadSO(usize),
+    AddFFIFn(usize, usize, String, Vec<FfiTypeDesc>, FfiTypeDesc),
     CallFFIFn(usize, usize, usize, usize, usize),
 
     Ok,
